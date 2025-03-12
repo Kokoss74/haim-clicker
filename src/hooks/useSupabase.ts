@@ -4,6 +4,7 @@ import { supabase } from '../supabase/client'
 import { User } from '../types/user'
 import { Attempt } from '../types/attempt'
 import { GameSettings, DiscountRange } from '../types/settings'
+import bcrypt from 'bcrypt'
 
 interface UseSupabaseReturn {
   registerUser: (name: string, phone: string) => Promise<User | null>
@@ -271,8 +272,7 @@ export const useSupabase = (): UseSupabaseReturn => {
     try {
       setLoading(true)
       
-      // В реальном приложении здесь должна быть проверка пароля через API
-      // Для демонстрации используем прямое сравнение с хешем
+      // Получаем данные администратора из базы данных
       const { data: admin, error } = await supabase
         .from('admins')
         .select('*')
@@ -291,9 +291,17 @@ export const useSupabase = (): UseSupabaseReturn => {
         return false
       }
       
-      // Здесь должна быть проверка пароля с использованием bcrypt
-      // Для демонстрации просто сравниваем с захардкоженным значением
-      const isPasswordCorrect = password === 'admin123'
+      // Получаем хеш пароля из переменной окружения
+      const hashedPassword = import.meta.env.VITE_ADMIN_PASSWORD 
+      
+      if (!hashedPassword) {
+        console.error('Ошибка: Хеш пароля администратора не найден в переменных окружения')
+        toast.error('Ошибка конфигурации: отсутствует пароль администратора')
+        return false
+      }
+      
+      // Проверяем пароль с использованием bcrypt
+      const isPasswordCorrect = await bcrypt.compare(password, hashedPassword)
       
       if (!isPasswordCorrect) {
         // Увеличиваем счетчик неудачных попыток
