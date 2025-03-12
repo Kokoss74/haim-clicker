@@ -4,7 +4,7 @@ import { supabase } from '../supabase/client'
 import { User } from '../types/user'
 import { Attempt } from '../types/attempt'
 import { GameSettings, DiscountRange } from '../types/settings'
-import bcrypt from 'bcrypt'
+import bcrypt from 'bcryptjs'
 
 interface UseSupabaseReturn {
   registerUser: (name: string, phone: string) => Promise<User | null>

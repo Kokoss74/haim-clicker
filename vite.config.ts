@@ -5,10 +5,13 @@ import path from 'path'
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
+  server: {
+    port: 5555, 
+  },
   build: {
     rollupOptions: {
       external: [
-        /^@mapbox\/node-pre-gyp\/.*/,
+        // /^@mapbox\/node-pre-gyp\/.*/,
         "mock-aws-s3",
         "aws-sdk",
         "nock"
@@ -17,7 +20,7 @@ export default defineConfig({
   },
   optimizeDeps: {
     exclude: [
-      '@mapbox/node-pre-gyp',
+      // '@mapbox/node-pre-gyp',
       'mock-aws-s3',
       'aws-sdk',
       'nock'
