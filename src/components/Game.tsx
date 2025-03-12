@@ -1,4 +1,3 @@
-// @ts-nocheck
 import React, { useState } from 'react'
 import { useTimer } from '../hooks/useTimer'
 import { useSupabase } from '../hooks/useSupabase'

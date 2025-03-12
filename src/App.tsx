@@ -3,9 +3,8 @@ import { Routes, Route, Navigate } from 'react-router-dom'
 import { toast } from 'react-toastify'
 import { supabase } from './supabase/client'
 import Game from './components/Game'
-import Login from './components/Login'
-import AdminPanel from './components/AdminPanel'
-import AdminLogin from './components/AdminLogin'
+import Login from './components/Login.tsx'
+import AdminPanel from './components/AdminPanel.tsx'
 import { User } from './types/user'
 
 function App() {
@@ -49,12 +48,11 @@ function App() {
   return (
     <Routes>
       <Route path="/" element={user ? <Game user={user} /> : <Login setUser={setUser} />} />
-      <Route path="/admin/login" element={<AdminLogin />} />
-      <Route 
-        path="/admin" 
+      <Route
+        path="/admin"
         element={
           <AdminPanel />
-        } 
+        }
       />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
