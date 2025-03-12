@@ -4,8 +4,8 @@ import { toast } from 'react-toastify'
 import { supabase } from './supabase/client'
 import Game from './components/Game'
 import Login from './components/Login.tsx'
-import AdminPanel from './components/AdminPanel.tsx'
 import { User } from './types/user'
+import AdminPanel from './components/AdminPanel.tsx'
 
 function App() {
   const [user, setUser] = useState<User | null>(null)

@@ -1,128 +1,69 @@
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { supabase } from '../supabase/client';
-import { Database } from '../types/database';
-
-type Question = Database['public']['Tables']['questions']['Row'];
 
 const AdminPanel = () => {
-  const [questions, setQuestions] = useState<Question[]>([]);
-  const [newQuestion, setNewQuestion] = useState<Omit<Question, 'id'>>({
-    question_text: '',
-    answer: '',
-    difficulty: 1,
-    hint: '',
-    reward: 1,
-  });
+  const resetAttempts = async () => {
+    try {
+      const { error } = await supabase
+        .from('attempts')
+        .delete()
+        .neq('user_id', '0'); // Assuming user_id '0' is a default value and should not be deleted
 
-  useEffect(() => {
-    fetchQuestions();
-  }, []);
-
-  const fetchQuestions = async () => {
-    const { data, error } = await supabase
-      .from('questions')
-      .select('*')
-      .order('id');
-
-    if (error) {
-      console.error('Error fetching questions:', error);
-    } else {
-      setQuestions(data || []);
-    }
-  };
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target;
-    setNewQuestion(prev => ({
-      ...prev,
-      [name]: name === 'difficulty' || name === 'reward' ? parseInt(value, 10) : value,
-    }));
-  };
-
-  const addQuestion = async () => {
-    const { data, error } = await supabase
-      .from('questions')
-      .insert([newQuestion])
-      .select()
-      .single();
-
-    if (error) {
-      console.error('Error adding question:', error);
-    } else {
-      setQuestions([...questions, data]);
-      setNewQuestion({
-        question_text: '',
-        answer: '',
-        difficulty: 1,
-        hint: '',
-        reward: 1,
-      });
-    }
-  };
-
-  const deleteQuestion = async (id: number) => {
-    const { error } = await supabase
-      .from('questions')
-      .delete()
-      .eq('id', id);
-
-    if (error) {
-      console.error('Error deleting question:', error);
-    } else {
-      setQuestions(questions.filter(question => question.id !== id));
+      if (error) {
+        console.error('Ошибка при сбросе попыток:', error);
+        alert('Ошибка при сбросе попыток. Смотрите консоль для деталей.');
+      } else {
+        alert('Попытки пользователей успешно сброшены!');
+      }
+    } catch (error) {
+      console.error('Ошибка при сбросе попыток:', error);
+      alert('Произошла ошибка при сбросе попыток. Смотрите консоль для деталей.');
     }
   };
 
   return (
-    <div>
-      <h2>Admin Panel</h2>
+    <div className="container mx-auto p-4">
+      <h1 className="text-2xl font-bold mb-4">Admin Panel</h1>
 
-      {/* Add Question Form */}
-      <h3>Add New Question</h3>
-      <input
-        type="text"
-        name="question_text"
-        placeholder="Question Text"
-        value={newQuestion.question_text}
-        onChange={handleInputChange}
-      />
-      <textarea
-        name="answer"
-        placeholder="Answer"
-        value={newQuestion.answer}
-        onChange={handleInputChange}
-      />
-      <select name="difficulty" value={newQuestion.difficulty} onChange={handleInputChange}>
-        <option value={1}>Easy</option>
-        <option value={2}>Medium</option>
-        <option value={3}>Hard</option>
-      </select>
-      <input
-        type="text"
-        name="hint"
-        placeholder="Hint"
-        value={newQuestion.hint}
-        onChange={handleInputChange}
-      />
-      <input
-        type="number"
-        name="reward"
-        placeholder="Reward"
-        value={newQuestion.reward}
-        onChange={handleInputChange}
-      />
-      <button onClick={addQuestion}>Add Question</button>
+      <section className="mb-4">
+        <h2 className="text-xl font-semibold mb-2">Game Management</h2>
+        <button
+          className="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded"
+          onClick={resetAttempts}
+        >
+          Сбросить попытки
+        </button>
+        <div className="mt-2">
+          <label className="block text-gray-700 text-sm font-bold mb-2">
+            Количество попыток:
+          </label>
+          <input
+            type="number"
+            className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+            defaultValue={10}
+          />
+          <button className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded mt-2">
+            Изменить
+          </button>
+        </div>
+        {/* Функциональность для изменения диапазонов скидок */}
+        <p>Функциональность для изменения диапазонов скидок будет реализована здесь.</p>
+      </section>
 
-      {/* Question List */}
-      <h3>Existing Questions</h3>
-      <ul>
-        {questions.map(question => (
-          <li key={question.id}>
-            {question.question_text} - {question.answer} ({question.difficulty})
-            <button onClick={() => deleteQuestion(question.id)}>Delete</button>
-          </li>
-        ))}
-      </ul>
+      <section className="mb-4">
+        <h2 className="text-xl font-semibold mb-2">User Data Management</h2>
+        <button className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">
+          Экспорт данных пользователей
+        </button>
+        {/* Функциональность для просмотра и экспорта данных пользователей */}
+        <p>Функциональность для просмотра данных пользователей будет реализована здесь.</p>
+      </section>
+
+      <section className="mb-4">
+        <h2 className="text-xl font-semibold mb-2">Admin Actions Log</h2>
+        {/* Функциональность для логирования действий администратора */}
+        <p>Функциональность для логирования действий администратора будет реализована здесь.</p>
+      </section>
     </div>
   );
 };
