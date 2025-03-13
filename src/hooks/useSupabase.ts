@@ -146,7 +146,10 @@ export const useSupabase = (): UseSupabaseReturn => {
 
   const getUser = async (userId: string): Promise<User | null> => {
     try {
-      const { data, error } = await supabase
+      // Получаем клиент с токеном авторизации
+      const clientWithAuth = setupAuthHeaders()
+      
+      const { data, error } = await clientWithAuth
         .from('users')
         .select('*')
         .eq('id', userId)
@@ -168,8 +171,11 @@ export const useSupabase = (): UseSupabaseReturn => {
     try {
       setLoading(true)
       
+      // Получаем клиент с токеном авторизации
+      const clientWithAuth = setupAuthHeaders()
+      
       // Получаем текущего пользователя
-      const { data: user } = await supabase
+      const { data: user } = await clientWithAuth
         .from('users')
         .select('*')
         .eq('id', userId)
@@ -181,7 +187,7 @@ export const useSupabase = (): UseSupabaseReturn => {
       }
       
       // Получаем настройки игры для определения скидки
-      const { data: settings } = await supabase
+      const { data: settings } = await clientWithAuth
         .from('game_settings')
         .select('*')
         .eq('id', 1)
@@ -193,7 +199,7 @@ export const useSupabase = (): UseSupabaseReturn => {
       }
       
       // Записываем попытку
-      const { error: attemptError } = await supabase
+      const { error: attemptError } = await clientWithAuth
         .from('attempts')
         .insert([
           { user_id: userId, difference }
@@ -217,8 +223,8 @@ export const useSupabase = (): UseSupabaseReturn => {
       
       // Обновляем данные пользователя
       const newAttemptsLeft = user.attempts_left - 1
-      const newBestResult = user.best_result === null || difference < user.best_result 
-        ? difference 
+      const newBestResult = user.best_result === null || difference < user.best_result
+        ? difference
         : user.best_result
       
       // Определяем новую скидку на основе лучшего результата
@@ -230,9 +236,9 @@ export const useSupabase = (): UseSupabaseReturn => {
         }
       }
       
-      const { error: updateError } = await supabase
+      const { error: updateError } = await clientWithAuth
         .from('users')
-        .update({ 
+        .update({
           attempts_left: newAttemptsLeft,
           best_result: newBestResult,
           discount: newDiscount
@@ -266,7 +272,10 @@ export const useSupabase = (): UseSupabaseReturn => {
 
   const getUserAttempts = async (userId: string): Promise<Attempt[]> => {
     try {
-      const { data, error } = await supabase
+      // Получаем клиент с токеном авторизации
+      const clientWithAuth = setupAuthHeaders()
+      
+      const { data, error } = await clientWithAuth
         .from('attempts')
         .select('*')
         .eq('user_id', userId)
@@ -286,7 +295,10 @@ export const useSupabase = (): UseSupabaseReturn => {
 
   const getGameSettings = async (): Promise<GameSettings | null> => {
     try {
-      const { data, error } = await supabase
+      // Получаем клиент с токеном авторизации
+      const clientWithAuth = setupAuthHeaders()
+      
+      const { data, error } = await clientWithAuth
         .from('game_settings')
         .select('*')
         .eq('id', 1)
@@ -345,8 +357,11 @@ export const useSupabase = (): UseSupabaseReturn => {
     try {
       setLoading(true)
       
+      // Получаем клиент с токеном авторизации
+      const clientWithAuth = setupAuthHeaders()
+      
       // Получаем настройки игры для установки количества попыток
-      const { data: settings } = await supabase
+      const { data: settings } = await clientWithAuth
         .from('game_settings')
         .select('*')
         .eq('id', 1)
@@ -355,7 +370,7 @@ export const useSupabase = (): UseSupabaseReturn => {
       const attemptsNumber = settings?.attempts_number || 10
       
       // Сбрасываем попытки пользователя
-      const { error } = await supabase
+      const { error } = await clientWithAuth
         .from('users')
         .update({ attempts_left: attemptsNumber })
         .eq('id', userId)
@@ -381,8 +396,11 @@ export const useSupabase = (): UseSupabaseReturn => {
     try {
       setLoading(true)
       
+      // Получаем клиент с токеном авторизации
+      const clientWithAuth = setupAuthHeaders()
+      
       // Обновляем количество попыток в настройках
-      const { error } = await supabase
+      const { error } = await clientWithAuth
         .from('game_settings')
         .update({ attempts_number: number })
         .eq('id', 1)
@@ -408,8 +426,11 @@ export const useSupabase = (): UseSupabaseReturn => {
     try {
       setLoading(true)
       
+      // Получаем клиент с токеном авторизации
+      const clientWithAuth = setupAuthHeaders()
+      
       // Обновляем диапазоны скидок в настройках
-      const { error } = await supabase
+      const { error } = await clientWithAuth
         .from('game_settings')
         .update({ discount_ranges: ranges })
         .eq('id', 1)
@@ -433,7 +454,10 @@ export const useSupabase = (): UseSupabaseReturn => {
 
   const getAllUsers = async (search?: string): Promise<User[]> => {
     try {
-      let query = supabase
+      // Получаем клиент с токеном авторизации
+      const clientWithAuth = setupAuthHeaders()
+      
+      let query = clientWithAuth
         .from('users')
         .select('*')
         .order('created_at', { ascending: false })
@@ -458,7 +482,10 @@ export const useSupabase = (): UseSupabaseReturn => {
 
   const exportUsers = async (startDate: string, endDate: string): Promise<User[]> => {
     try {
-      const { data, error } = await supabase
+      // Получаем клиент с токеном авторизации
+      const clientWithAuth = setupAuthHeaders()
+      
+      const { data, error } = await clientWithAuth
         .from('users')
         .select('*')
         .gte('created_at', startDate)
