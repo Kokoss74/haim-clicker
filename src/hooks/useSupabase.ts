@@ -66,13 +66,18 @@ export const useSupabase = (): UseSupabaseReturn => {
         toast.error(data.message || 'Ошибка при регистрации')
         return null
       }
+      if (!data.token) {
+        toast.error('Отсутствует JWT токен')
+        return null
+      }
       
       // Сохраняем токен и данные пользователя
       setToken(data.token)
       setUser(data.user)
       
-      // Устанавливаем токен для запросов
-      setupAuthHeaders()
+      // Получаем клиент с установленным токеном
+      const clientWithAuth = setupAuthHeaders()
+      // Если нужно, можно использовать clientWithAuth для запросов, требующих авторизации
       
       toast.success('Регистрация успешна!')
       return data.user
@@ -104,13 +109,18 @@ export const useSupabase = (): UseSupabaseReturn => {
         toast.error(data.message || 'Пользователь не найден')
         return null
       }
+      if (!data.token) {
+        toast.error('Отсутствует JWT токен')
+        return null
+      }
       
       // Сохраняем токен и данные пользователя
       setToken(data.token)
       setUser(data.user)
       
-      // Устанавливаем токен для запросов
-      setupAuthHeaders()
+      // Получаем клиент с установленным токеном
+      const clientWithAuth = setupAuthHeaders()
+      // Если нужно, можно использовать clientWithAuth для запросов, требующих авторизации
       
       toast.success('Вход выполнен успешно!')
       return data.user
@@ -242,7 +252,7 @@ export const useSupabase = (): UseSupabaseReturn => {
         best_result: newBestResult,
         discount: newDiscount
       }
-      localStorage.setItem('user', JSON.stringify(updatedUser))
+      localStorage.setItem('userData', JSON.stringify(updatedUser))
       
       return true
     } catch (error) {
