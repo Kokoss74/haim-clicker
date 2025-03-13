@@ -9,3 +9,19 @@ if (!supabaseUrl || !supabaseAnonKey) {
 }
 
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey)
+
+// Функция для добавления токена к запросам
+export const setupAuthHeaders = () => {
+  const token = localStorage.getItem('userToken')
+  
+  if (token) {
+    // Устанавливаем заголовок Authorization для всех запросов
+    supabase.auth.setSession({
+      access_token: token,
+      refresh_token: '',
+    })
+  }
+}
+
+// Вызываем при инициализации приложения
+setupAuthHeaders()

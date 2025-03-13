@@ -12,7 +12,7 @@ interface GameProps {
 
 const Game: React.FC<GameProps> = ({ user }) => {
   const { time, milliseconds, startTimer, stopTimer, resetTimer } = useTimer()
-  const { recordAttempt, getUserAttempts, getUser } = useSupabase()
+  const { recordAttempt, getUserAttempts, getUser, logout } = useSupabase()
   const [attempts, setAttempts] = useState<Attempt[]>([])
   const [showRules, setShowRules] = useState(false)
   const [bestResultIndex, setBestResultIndex] = useState<number | null>(null)
@@ -139,9 +139,14 @@ const Game: React.FC<GameProps> = ({ user }) => {
           </tbody>
         </table>
       </div>
-      <button onClick={() => setShowRules(true)} className="mt-4 btn btn-secondary">
-        Правила игры
-      </button>
+      <div className="mt-4 flex gap-2">
+        <button onClick={() => setShowRules(true)} className="btn btn-secondary">
+          Правила игры
+        </button>
+        <button onClick={logout} className="btn btn-danger">
+          Выйти
+        </button>
+      </div>
       <ModalRules isOpen={showRules} onRequestClose={() => setShowRules(false)} />
     </div>
   )

@@ -1,10 +1,10 @@
 import { useState } from 'react'
 import { toast } from 'react-toastify'
-import { supabase } from '../supabase/client'
+import { supabase, setupAuthHeaders } from '../supabase/client'
 import { User } from '../types/user'
 import { Attempt } from '../types/attempt'
 import { GameSettings, DiscountRange } from '../types/settings'
-import bcrypt from 'bcryptjs'
+import { useLocalStorage } from './useLocalStorage'
 
 interface UseSupabaseReturn {
   registerUser: (name: string, phone: string) => Promise<User | null>
@@ -13,50 +13,48 @@ interface UseSupabaseReturn {
   recordAttempt: (userId: string, difference: number) => Promise<boolean>
   getUserAttempts: (userId: string) => Promise<Attempt[]>
   getGameSettings: () => Promise<GameSettings | null>
-  adminLogin: (password: string) => Promise<boolean>
+  adminLogin: (username: string, password: string) => Promise<boolean>
   resetUserAttempts: (userId: string) => Promise<boolean>
   changeAttemptsNumber: (number: number) => Promise<boolean>
   changeDiscountRanges: (ranges: DiscountRange[]) => Promise<boolean>
   getAllUsers: (search?: string) => Promise<User[]>
   exportUsers: (startDate: string, endDate: string) => Promise<User[]>
+  logout: () => void
 }
 
 export const useSupabase = (): UseSupabaseReturn => {
   const [loading, setLoading] = useState<boolean>(false)
+  const [user, setUser] = useLocalStorage<User | null>('userData', null)
+  const [token, setToken] = useLocalStorage<string | null>('userToken', null)
+
+  // Проверка существования пользователя по номеру телефона
+  const checkPhoneExists = async (phone: string): Promise<boolean> => {
+    try {
+      const { data, error } = await supabase.rpc('check_phone_exists', {
+        phone_number: phone
+      })
+      
+      if (error) {
+        console.error('Ошибка при проверке телефона:', error)
+        return false
+      }
+      
+      return data
+    } catch (error) {
+      console.error('Ошибка при проверке телефона:', error)
+      return false
+    }
+  }
 
   const registerUser = async (name: string, phone: string): Promise<User | null> => {
     try {
       setLoading(true)
 
-      // Проверяем, существует ли пользователь с таким телефоном
-      const { data: existingUser } = await supabase
-        .from('users')
-        .select('*')
-        .eq('phone', phone)
-        .single()
-      
-      if (existingUser) {
-        toast.error('Пользователь уже зарегистрирован')
-        return null
-      }
-      
-      // Получаем настройки игры для установки количества попыток
-      const { data: settings } = await supabase
-        .from('game_settings')
-        .select('*')
-        .eq('id', 1)
-        .single()
-      
-      const attemptsNumber = settings?.attempts_number || 10
-      
-      // Создаем нового пользователя
-      const { data, error } = await supabase
-        .from('users')
-        .insert([
-          { name, phone, attempts_left: attemptsNumber, discount: 3 }
-        ])
-        .select()
-        .single()
+      // Регистрируем пользователя через RPC функцию
+      const { data, error } = await supabase.rpc('register_user', {
+        user_name: name,
+        phone_number: phone
+      })
       
       if (error) {
         console.error('Ошибка при регистрации:', error)
@@ -64,11 +62,20 @@ export const useSupabase = (): UseSupabaseReturn => {
         return null
       }
       
-      // Сохраняем пользователя в localStorage
-      localStorage.setItem('user', JSON.stringify(data))
+      if (!data.success) {
+        toast.error(data.message || 'Ошибка при регистрации')
+        return null
+      }
+      
+      // Сохраняем токен и данные пользователя
+      setToken(data.token)
+      setUser(data.user)
+      
+      // Устанавливаем токен для запросов
+      setupAuthHeaders()
       
       toast.success('Регистрация успешна!')
-      return data
+      return data.user
     } catch (error) {
       console.error('Ошибка при регистрации:', error)
       toast.error('Произошла ошибка при регистрации')
@@ -82,23 +89,31 @@ export const useSupabase = (): UseSupabaseReturn => {
     try {
       setLoading(true)
       
-      // Ищем пользователя по номеру телефона
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('phone', phone)
-        .single()
+      // Входим через RPC функцию
+      const { data, error } = await supabase.rpc('login_user', {
+        phone_number: phone
+      })
       
-      if (error || !data) {
-        toast.error('Пользователь не найден')
+      if (error) {
+        console.error('Ошибка при входе:', error)
+        toast.error('Ошибка при входе')
         return null
       }
       
-      // Сохраняем пользователя в localStorage
-      localStorage.setItem('user', JSON.stringify(data))
+      if (!data.success) {
+        toast.error(data.message || 'Пользователь не найден')
+        return null
+      }
+      
+      // Сохраняем токен и данные пользователя
+      setToken(data.token)
+      setUser(data.user)
+      
+      // Устанавливаем токен для запросов
+      setupAuthHeaders()
       
       toast.success('Вход выполнен успешно!')
-      return data
+      return data.user
     } catch (error) {
       console.error('Ошибка при входе:', error)
       toast.error('Произошла ошибка при входе')
@@ -106,6 +121,17 @@ export const useSupabase = (): UseSupabaseReturn => {
     } finally {
       setLoading(false)
     }
+  }
+
+  const logout = () => {
+    // Удаляем данные пользователя и токен
+    setUser(null)
+    setToken(null)
+    localStorage.removeItem('userToken')
+    localStorage.removeItem('userData')
+    
+    // Перенаправляем на страницу входа
+    window.location.href = '/'
   }
 
   const getUser = async (userId: string): Promise<User | null> => {
@@ -268,77 +294,30 @@ export const useSupabase = (): UseSupabaseReturn => {
     }
   }
 
-  const adminLogin = async (password: string): Promise<boolean> => {
+  const adminLogin = async (username: string, password: string): Promise<boolean> => {
     try {
       setLoading(true)
       
-      // Получаем данные администратора из базы данных
-      const { data: admin, error } = await supabase
-        .from('admins')
-        .select('*')
-        .eq('id', 1)
-        .single()
+      // Используем RPC функцию для входа администратора
+      const { data, error } = await supabase.rpc('admin_login', {
+        admin_username: username,
+        input_password: password
+      })
       
-      if (error || !admin) {
+      if (error) {
+        console.error('Ошибка при входе в админ-панель:', error)
         toast.error('Ошибка при входе в админ-панель')
         return false
       }
       
-      // Проверяем, не заблокирован ли аккаунт
-      if (admin.locked_until && new Date(admin.locked_until) > new Date()) {
-        const unlockTime = new Date(admin.locked_until)
-        toast.error(`Аккаунт заблокирован до ${unlockTime.toLocaleTimeString()}`)
+      if (!data.success) {
+        toast.error(data.message || 'Ошибка при входе')
         return false
       }
       
-      // Получаем хеш пароля из переменной окружения
-      const hashedPassword = import.meta.env.VITE_ADMIN_PASSWORD 
-      
-      if (!hashedPassword) {
-        console.error('Ошибка: Хеш пароля администратора не найден в переменных окружения')
-        toast.error('Ошибка конфигурации: отсутствует пароль администратора')
-        return false
-      }
-      
-      // Проверяем пароль с использованием bcrypt
-      const isPasswordCorrect = await bcrypt.compare(password, hashedPassword)
-      
-      if (!isPasswordCorrect) {
-        // Увеличиваем счетчик неудачных попыток
-        const newFailedAttempts = admin.failed_attempts + 1
-        
-        // Если достигли 5 неудачных попыток, блокируем на 15 минут
-        let lockedUntil = null
-        if (newFailedAttempts >= 5) {
-          const lockTime = new Date()
-          lockTime.setMinutes(lockTime.getMinutes() + 15)
-          lockedUntil = lockTime.toISOString()
-          toast.error(`Превышено количество попыток входа. Аккаунт заблокирован на 15 минут.`)
-        }
-        
-        // Обновляем данные в базе
-        await supabase
-          .from('admins')
-          .update({ 
-            failed_attempts: newFailedAttempts,
-            locked_until: lockedUntil
-          })
-          .eq('id', 1)
-        
-        toast.error('Неверный пароль')
-        return false
-      }
-      
-      // Сбрасываем счетчик неудачных попыток при успешном входе
-      await supabase
-        .from('admins')
-        .update({ 
-          failed_attempts: 0,
-          locked_until: null
-        })
-        .eq('id', 1)
-      
-      // Устанавливаем флаг админа в localStorage
+      // Сохраняем токен и данные администратора
+      localStorage.setItem('adminToken', data.token)
+      localStorage.setItem('adminData', JSON.stringify(data.admin))
       localStorage.setItem('isAdmin', 'true')
       
       toast.success('Вход в админ-панель выполнен успешно!')
@@ -500,6 +479,7 @@ export const useSupabase = (): UseSupabaseReturn => {
     changeAttemptsNumber,
     changeDiscountRanges,
     getAllUsers,
-    exportUsers
+    exportUsers,
+    logout
   }
 }

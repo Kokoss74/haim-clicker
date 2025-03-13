@@ -1,7 +1,8 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useSupabase } from "../hooks/useSupabase";
 import { User } from "../types/user";
 import { toast } from "react-toastify";
+import { useLocalStorage } from "../hooks/useLocalStorage";
 
 interface LoginProps {
   setUser: (user: User) => void;
@@ -12,7 +13,15 @@ const Login: React.FC<LoginProps> = ({ setUser }) => {
   const [name, setName] = useState("");
   const [showRegistration, setShowRegistration] = useState(false);
   const [phoneError, setPhoneError] = useState("");
-  const { loginUser, registerUser } = useSupabase();
+  const { loginUser, registerUser, logout } = useSupabase();
+  const [storedUser] = useLocalStorage<User | null>("userData", null);
+  
+  // Проверяем, есть ли сохраненный пользователь при загрузке компонента
+  useEffect(() => {
+    if (storedUser) {
+      setUser(storedUser);
+    }
+  }, [storedUser, setUser]);
 
   // Функция для валидации израильского номера телефона
   const validateIsraeliPhoneNumber = (phone: string): boolean => {
