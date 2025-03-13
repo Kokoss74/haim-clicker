@@ -20,7 +20,7 @@ const Login: React.FC<LoginProps> = ({ setUser }) => {
     // Поддерживает форматы:
     // - 05X-XXXXXXX или 05XXXXXXXX (мобильные)
     // - +9725X-XXXXXXX или +9725XXXXXXXX (международный формат)
-    const israeliPhoneRegex = /^(?:(?:\+972|0)(?:-)?(?:5|7|8|9))(\d{7,9})$/;
+    const israeliPhoneRegex = /^(?:(?:\+972|0)(?:-)?(?:5|7|8|9))(\d{7,8})$/;
     return israeliPhoneRegex.test(phone.replace(/\s|-/g, ""));
   };
 
@@ -48,7 +48,15 @@ const Login: React.FC<LoginProps> = ({ setUser }) => {
     }
 
     // Проверка наличия пользователя в базе данных
-    const formattedPhoneForCheck = formattedPhone.startsWith("0") ? "+972" + formattedPhone.slice(1) : formattedPhone;
+    // Преобразуем номер в международный формат для проверки в базе
+    let formattedPhoneForCheck = formattedPhone;
+    if (formattedPhone.startsWith("0")) {
+      formattedPhoneForCheck = "+972" + formattedPhone.slice(1);
+    } else if (!formattedPhone.startsWith("+972")) {
+      // Если номер не начинается с +972 и не с 0, добавляем +972
+      formattedPhoneForCheck = "+972" + formattedPhone;
+    }
+    
     const user = await loginUser(formattedPhoneForCheck);
 
       if (user) {
@@ -79,8 +87,17 @@ const Login: React.FC<LoginProps> = ({ setUser }) => {
     }
 
     // Форматируем номер телефона для сохранения в базе данных
-    const formattedPhoneForDB =
-      "+972" + formattedPhone.slice(formattedPhone.startsWith("0") ? 1 : 0);
+    let formattedPhoneForDB = formattedPhone;
+    
+    // Если номер начинается с 0, заменяем на +972
+    if (formattedPhone.startsWith("0")) {
+      formattedPhoneForDB = "+972" + formattedPhone.slice(1);
+    }
+    // Если номер не начинается с +972, добавляем код страны
+    else if (!formattedPhone.startsWith("+972")) {
+      formattedPhoneForDB = "+972" + formattedPhone;
+    }
+    // Если номер уже начинается с +972, оставляем как есть
 
     // Регистрация пользователя
     const user = await registerUser(name, formattedPhoneForDB);
