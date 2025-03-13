@@ -71,12 +71,21 @@ export const useSupabase = (): UseSupabaseReturn => {
         return null
       }
       
-      // Сохраняем токен и данные пользователя
-      setToken(data.token)
+      // Проверяем, что токен является строкой
+      if (typeof data.token !== 'string' || !data.token.trim()) {
+        console.error('Получен недействительный токен:', data.token)
+        toast.error('Ошибка авторизации: недействительный токен')
+        return null
+      }
+      
+      // Сохраняем токен напрямую в localStorage (без JSON.stringify)
+      localStorage.setItem('userToken', data.token)
+      
+      // Сохраняем данные пользователя
       setUser(data.user)
       
-      // Обновляем клиент с установленным токеном
-      const clientWithAuth = updateAuthClient()
+      const clientWithAuth = await updateAuthClient()
+      console.log('Клиент обновлен после регистрации')
       
       toast.success('Регистрация успешна!')
       return data.user
@@ -113,12 +122,21 @@ export const useSupabase = (): UseSupabaseReturn => {
         return null
       }
       
-      // Сохраняем токен и данные пользователя
-      setToken(data.token)
+      // Проверяем, что токен является строкой
+      if (typeof data.token !== 'string' || !data.token.trim()) {
+        console.error('Получен недействительный токен:', data.token)
+        toast.error('Ошибка авторизации: недействительный токен')
+        return null
+      }
+      
+      // Сохраняем токен напрямую в localStorage (без JSON.stringify)
+      localStorage.setItem('userToken', data.token)
+      
+      // Сохраняем данные пользователя
       setUser(data.user)
       
-      // Обновляем клиент с установленным токеном
-      const clientWithAuth = updateAuthClient()
+      const clientWithAuth = await updateAuthClient()
+      console.log('Клиент обновлен после входа')
       
       toast.success('Вход выполнен успешно!')
       return data.user
@@ -132,17 +150,28 @@ export const useSupabase = (): UseSupabaseReturn => {
   }
 
   const logout = () => {
-    // Удаляем данные пользователя и токен
-    setUser(null)
-    setToken(null)
-    localStorage.removeItem('userToken')
-    localStorage.removeItem('userData')
-    
-    // Обновляем клиент Supabase без токена
-    updateAuthClient()
-    
-    // Перенаправляем на страницу входа
-    window.location.href = '/'
+    try {
+      console.log('Выход из системы...')
+      
+      // Удаляем данные пользователя и токен
+      setUser(null)
+      setToken(null)
+      
+      // Удаляем данные из localStorage
+      localStorage.removeItem('userToken')
+      localStorage.removeItem('userData')
+      
+      // Обновляем клиент Supabase без токена
+      updateAuthClient()
+      console.log('Клиент обновлен после выхода')
+      
+      // Перенаправляем на страницу входа
+      window.location.href = '/'
+    } catch (error) {
+      console.error('Ошибка при выходе из системы:', error)
+      // Принудительно перенаправляем на страницу входа даже при ошибке
+      window.location.href = '/'
+    }
   }
 
   const getUser = async (userId: string): Promise<User | null> => {
@@ -152,11 +181,30 @@ export const useSupabase = (): UseSupabaseReturn => {
       if (!storedToken) {
         console.error('Отсутствует токен авторизации')
         toast.error('Ошибка авторизации: отсутствует токен')
+        
+        // Перенаправляем на страницу входа при отсутствии токена
+        // setTimeout(() => {
+        //   logout()
+        // }, 1000)
+        
+        return null
+      }
+      
+      // Проверяем валидность токена
+      if (typeof storedToken !== 'string' || !storedToken.trim()) {
+        console.error('Недействительный токен:', storedToken)
+        toast.error('Ошибка авторизации: недействительный токен')
+        
+        // Удаляем недействительный токен и перенаправляем на страницу входа
+        // setTimeout(() => {
+        //   logout()
+        // }, 1000)
+        
         return null
       }
       
       // Получаем клиент с токеном авторизации
-      const clientWithAuth = setupAuthHeaders()
+      const clientWithAuth = await setupAuthHeaders();
       
       console.log('Запрос данных пользователя с ID:', userId)
       const { data, error } = await clientWithAuth
@@ -167,7 +215,20 @@ export const useSupabase = (): UseSupabaseReturn => {
       
       if (error) {
         console.error('Ошибка при получении пользователя:', error)
-        toast.error(`Ошибка при получении пользователя: ${error.message}`)
+        
+        // Проверяем, связана ли ошибка с авторизацией
+        if (error.message.includes('JWT') || error.message.includes('token') ||
+            error.message.includes('auth') || error.message.includes('Headers')) {
+          toast.error('Ошибка авторизации. Выполняется выход из системы...')
+          
+          // Перенаправляем на страницу входа при ошибке авторизации
+          // setTimeout(() => {
+          //   logout()
+          // }, 1000)
+        } else {
+          toast.error(`Ошибка при получении пользователя: ${error.message}`)
+        }
+        
         return null
       }
       
@@ -180,7 +241,21 @@ export const useSupabase = (): UseSupabaseReturn => {
       return data
     } catch (error) {
       console.error('Ошибка при получении пользователя:', error)
-      toast.error(`Произошла ошибка: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`)
+      
+      // Проверяем, связана ли ошибка с авторизацией
+      const errorMessage = error instanceof Error ? error.message : 'Неизвестная ошибка'
+      if (errorMessage.includes('JWT') || errorMessage.includes('token') ||
+          errorMessage.includes('auth') || errorMessage.includes('Headers')) {
+        toast.error('Ошибка авторизации. Выполняется выход из системы...')
+        
+        // Перенаправляем на страницу входа при ошибке авторизации
+        // setTimeout(() => {
+        //   logout()
+        // }, 1000)
+      } else {
+        toast.error(`Произошла ошибка: ${errorMessage}`)
+      }
+      
       return null
     }
   }
@@ -198,7 +273,7 @@ export const useSupabase = (): UseSupabaseReturn => {
       }
       
       // Получаем клиент с токеном авторизации
-      const clientWithAuth = setupAuthHeaders()
+      const clientWithAuth = await setupAuthHeaders()
       console.log('Запись попытки для пользователя с ID:', userId)
       
       // Получаем текущего пользователя
@@ -304,14 +379,33 @@ export const useSupabase = (): UseSupabaseReturn => {
       if (!storedToken) {
         console.error('Отсутствует токен авторизации')
         toast.error('Ошибка авторизации: отсутствует токен')
+        
+        // Перенаправляем на страницу входа при отсутствии токена
+        // setTimeout(() => {
+        //   logout()
+        // }, 1000)
+        
+        return []
+      }
+      
+      // Проверяем валидность токена
+      if (typeof storedToken !== 'string' || !storedToken.trim()) {
+        console.error('Недействительный токен:', storedToken)
+        toast.error('Ошибка авторизации: недействительный токен')
+        
+        // Удаляем недействительный токен и перенаправляем на страницу входа
+        // setTimeout(() => {
+        //   logout()
+        // }, 1000)
+        
         return []
       }
       
       // Получаем клиент с токеном авторизации
-      const clientWithAuth = setupAuthHeaders()
+      const client = await setupAuthHeaders();
       
       console.log('Запрос попыток пользователя с ID:', userId)
-      const { data, error } = await clientWithAuth
+      const { data, error } = await client
         .from('attempts')
         .select('*')
         .eq('user_id', userId)
@@ -319,14 +413,41 @@ export const useSupabase = (): UseSupabaseReturn => {
       
       if (error) {
         console.error('Ошибка при получении попыток:', error)
-        toast.error(`Ошибка при получении попыток: ${error.message}`)
+        
+        // Проверяем, связана ли ошибка с авторизацией
+        if (error.message.includes('JWT') || error.message.includes('token') ||
+            error.message.includes('auth') || error.message.includes('Headers')) {
+          toast.error('Ошибка авторизации. Выполняется выход из системы...')
+          
+          // Перенаправляем на страницу входа при ошибке авторизации
+          // setTimeout(() => {
+          //   logout()
+          // }, 1000)
+        } else {
+          toast.error(`Ошибка при получении попыток: ${error.message}`)
+        }
+        
         return []
       }
       
       return data || []
     } catch (error) {
       console.error('Ошибка при получении попыток:', error)
-      toast.error(`Произошла ошибка: ${error instanceof Error ? error.message : 'Неизвестная ошибка'}`)
+      
+      // Проверяем, связана ли ошибка с авторизацией
+      const errorMessage = error instanceof Error ? error.message : 'Неизвестная ошибка'
+      if (errorMessage.includes('JWT') || errorMessage.includes('token') ||
+          errorMessage.includes('auth') || errorMessage.includes('Headers')) {
+        toast.error('Ошибка авторизации. Выполняется выход из системы...')
+        
+        // Перенаправляем на страницу входа при ошибке авторизации
+        // setTimeout(() => {
+        //   logout()
+        // }, 1000)
+      } else {
+        toast.error(`Произошла ошибка: ${errorMessage}`)
+      }
+      
       return []
     }
   }
@@ -334,7 +455,7 @@ export const useSupabase = (): UseSupabaseReturn => {
   const getGameSettings = async (): Promise<GameSettings | null> => {
     try {
       // Получаем клиент с токеном авторизации
-      const clientWithAuth = setupAuthHeaders()
+      const clientWithAuth = await setupAuthHeaders()
       
       const { data, error } = await clientWithAuth
         .from('game_settings')
@@ -396,7 +517,7 @@ export const useSupabase = (): UseSupabaseReturn => {
       setLoading(true)
       
       // Получаем клиент с токеном авторизации
-      const clientWithAuth = setupAuthHeaders()
+      const clientWithAuth = await setupAuthHeaders()
       
       // Получаем настройки игры для установки количества попыток
       const { data: settings } = await clientWithAuth
@@ -435,7 +556,7 @@ export const useSupabase = (): UseSupabaseReturn => {
       setLoading(true)
       
       // Получаем клиент с токеном авторизации
-      const clientWithAuth = setupAuthHeaders()
+      const clientWithAuth = await setupAuthHeaders()
       
       // Обновляем количество попыток в настройках
       const { error } = await clientWithAuth
@@ -465,7 +586,7 @@ export const useSupabase = (): UseSupabaseReturn => {
       setLoading(true)
       
       // Получаем клиент с токеном авторизации
-      const clientWithAuth = setupAuthHeaders()
+      const clientWithAuth = await setupAuthHeaders()
       
       // Обновляем диапазоны скидок в настройках
       const { error } = await clientWithAuth
@@ -493,7 +614,7 @@ export const useSupabase = (): UseSupabaseReturn => {
   const getAllUsers = async (search?: string): Promise<User[]> => {
     try {
       // Получаем клиент с токеном авторизации
-      const clientWithAuth = setupAuthHeaders()
+      const clientWithAuth = await setupAuthHeaders()
       
       let query = clientWithAuth
         .from('users')
@@ -521,7 +642,7 @@ export const useSupabase = (): UseSupabaseReturn => {
   const exportUsers = async (startDate: string, endDate: string): Promise<User[]> => {
     try {
       // Получаем клиент с токеном авторизации
-      const clientWithAuth = setupAuthHeaders()
+      const clientWithAuth = await setupAuthHeaders()
       
       const { data, error } = await clientWithAuth
         .from('users')

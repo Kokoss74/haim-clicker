@@ -26,42 +26,36 @@ export const supabase = createClient<Database>(
   }
 )
 
-// Функция для добавления токена к запросам
-export const setupAuthHeaders = () => {
-  let token = localStorage.getItem('userToken')
-  
+export const setupAuthHeaders = async () => {
+  let token = localStorage.getItem('userToken');
+
+  if (!token) {
+    console.log('Токен отсутствует, создание клиента без авторизации');
+    return supabase;
+  }
+
   // Если токен в localStorage в формате JSON строки, парсим его
-  if (token && (token.startsWith('"') && token.endsWith('"'))) {
-    try {
-      token = JSON.parse(token)
-    } catch (error) {
-      console.error('Ошибка при парсинге токена:', error)
+  if (token.startsWith('"') && token.endsWith('"')) {
+    token = JSON.parse(token);
+  }
+
+  if (typeof token !== 'string' || !token.trim()) {
+    console.error('Недействительный токен:', token);
+    return supabase;
+  }
+
+  console.log('Аутентификация через signInWithToken');
+  try {
+    const { data, error } = await supabase.auth.signInWithIdToken(token);
+    if (error) {
+      console.error('Ошибка аутентификации через signInWithToken:', error);
+    } else {
+      console.log('Аутентификация успешна:', data);
     }
+  } catch (error) {
+    console.error('Ошибка в signInWithToken:', error);
   }
-  
-  if (token) {
-    console.log('Создание клиента с токеном авторизации')
-    // Создаем новый экземпляр клиента с заголовком авторизации
-    // Это более надежный способ для пользовательской авторизации
-    return createClient<Database>(
-      supabaseUrl,
-      supabaseAnonKey,
-      {
-        auth: {
-          persistSession: true,
-          autoRefreshToken: true,
-        },
-        global: {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            'x-app-jwt-secret': supabaseJwtSecret || ''
-          }
-        }
-      }
-    )
-  }
-  console.log('Создание клиента без токена авторизации')
-  return supabase
+  return supabase;
 }
 
 // Инициализируем клиент с токеном, если он есть в localStorage
