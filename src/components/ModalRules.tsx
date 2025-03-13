@@ -12,7 +12,7 @@ const ModalRules: React.FC<ModalRulesProps> = ({ isOpen, onRequestClose }) => {
       isOpen={isOpen}
       onRequestClose={onRequestClose}
       contentLabel="Правила игры"
-      className="max-w-2xl mx-auto mt-20 p-6 bg-white rounded-lg shadow-lg"
+      className="max-w-2xl mx-auto mt-20 p-6 bg-black rounded-lg shadow-lg max-h-screen overflow-y-auto hidden-scrollbar"
       overlayClassName="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center"
     >
       <div>
@@ -47,7 +47,7 @@ const ModalRules: React.FC<ModalRulesProps> = ({ isOpen, onRequestClose }) => {
           </p>
           <table className="w-full border-collapse border border-gray-300">
             <thead>
-              <tr className="bg-gray-100">
+              <tr className="bg-black">
                 <th className="border border-gray-300 px-4 py-2">Отклонение (мс)</th>
                 <th className="border border-gray-300 px-4 py-2">Скидка (%)</th>
               </tr>
