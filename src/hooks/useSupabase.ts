@@ -140,7 +140,7 @@ export const useSupabase = (): UseSupabaseReturn => {
         .single()
       
       if (!user || user.attempts_left <= 0) {
-        toast.error('Для продолжения игры необходимо использовать уже имеющуюся скидку в магазине.')
+        toast.error('Для продолжения игры необходимо использовать имеющуюся скидку в магазине.')
         return false
       }
       

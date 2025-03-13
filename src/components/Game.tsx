@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useMemo } from 'react'
-import { useTimer } from '../hooks/useTimer'
-import { useSupabase } from '../hooks/useSupabase'
-import { User } from '../types/user'
-import { Attempt } from '../types/attempt'
-import ModalRules from './ModalRules'
+import React, { useState, useEffect, useMemo } from 'react';
+import { useTimer } from '../hooks/useTimer';
+import { useSupabase } from '../hooks/useSupabase';
+import { User } from '../types/user';
+import { Attempt } from '../types/attempt';
+import ModalRules from './ModalRules';
+import { toast } from 'react-toastify';
 
 interface GameProps {
   user: User
@@ -73,22 +74,28 @@ const Game: React.FC<GameProps> = ({ user }) => {
   }, [attempts])
   
   const handleAttempt = async () => {
-    stopTimer()
+    if (currentUser.attempts_left <= 0) {
+      toast.error(`Для продолжения игры необходимо использовать имеющуюся скидку ${currentUser.discount}% в магазине.`);
+      return;
+    }
+
+    stopTimer();
+
     // Вычисляем отклонение от целой секунды
-    const diff: number = milliseconds < 500 ? milliseconds : 1000 - milliseconds
-    const success: boolean = await recordAttempt(user.id, diff)
+    const diff: number = milliseconds < 500 ? milliseconds : 1000 - milliseconds;
+    const success: boolean = await recordAttempt(user.id, diff);
     if (success) {
-      const userAttempts = await getUserAttempts(user.id)
-      setAttempts(userAttempts)
-      
+      const userAttempts = await getUserAttempts(user.id);
+      setAttempts(userAttempts);
+
       // Обновляем данные пользователя
-      const updatedUser = await getUser(user.id)
+      const updatedUser = await getUser(user.id);
       if (updatedUser) {
-        setCurrentUser(updatedUser)
-        
+        setCurrentUser(updatedUser);
+
         // Проверяем, закончились ли попытки у пользователя
         if (updatedUser.attempts_left <= 0) {
-          findBestResult(userAttempts)
+          findBestResult(userAttempts);
         }
       }
     }
@@ -100,10 +107,9 @@ const Game: React.FC<GameProps> = ({ user }) => {
     <div className="p-4">
       <h1 className="text-3xl font-bold mb-4">Игра Clicker</h1>
       <div className="timer text-4xl font-mono mb-4">{time}</div>
-      <button 
-        onClick={handleAttempt} 
+      <button
+        onClick={handleAttempt}
         className="game-button mb-4"
-        disabled={currentUser.attempts_left <= 0}
       >
         Нажать
       </button>
@@ -124,7 +130,7 @@ const Game: React.FC<GameProps> = ({ user }) => {
             {displayedAttempts.map((attempt, index) => (
               <tr 
                 key={index} 
-                className={currentUser.attempts_left <= 0 && index === bestResultIndex ? "bg-red-200" : ""}
+                className={currentUser.attempts_left <= 0 && index === bestResultIndex ? "bg-lime-500" : ""}
               >
                 <td>{index + 1}</td>
                 <td>{attempt.difference}</td>
