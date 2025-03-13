@@ -1,667 +1,836 @@
-import { useState } from 'react'
-import { toast } from 'react-toastify'
-import { supabase, setupAuthHeaders, updateAuthClient } from '../supabase/client'
-import { User } from '../types/user'
-import { Attempt } from '../types/attempt'
-import { GameSettings, DiscountRange } from '../types/settings'
-import { useLocalStorage } from './useLocalStorage'
+import { useState } from "react";
+import { toast } from "react-toastify";
+import {
+  supabase,
+  setupAuthHeaders,
+  updateAuthClient,
+  cleanToken,
+} from "../supabase/client";
+import { User } from "../types/user";
+import { Attempt } from "../types/attempt";
+import { GameSettings, DiscountRange } from "../types/settings";
+import { useLocalStorage } from "./useLocalStorage";
 
 interface UseSupabaseReturn {
-  registerUser: (name: string, phone: string) => Promise<User | null>
-  loginUser: (phone: string) => Promise<User | null>
-  getUser: (userId: string) => Promise<User | null>
-  recordAttempt: (userId: string, difference: number) => Promise<boolean>
-  getUserAttempts: (userId: string) => Promise<Attempt[]>
-  getGameSettings: () => Promise<GameSettings | null>
-  adminLogin: (username: string, password: string) => Promise<boolean>
-  resetUserAttempts: (userId: string) => Promise<boolean>
-  changeAttemptsNumber: (number: number) => Promise<boolean>
-  changeDiscountRanges: (ranges: DiscountRange[]) => Promise<boolean>
-  getAllUsers: (search?: string) => Promise<User[]>
-  exportUsers: (startDate: string, endDate: string) => Promise<User[]>
-  logout: () => void
+  registerUser: (name: string, phone: string) => Promise<User | null>;
+  loginUser: (phone: string) => Promise<User | null>;
+  getUser: (userId: string) => Promise<User | null>;
+  recordAttempt: (userId: string, difference: number) => Promise<boolean>;
+  getUserAttempts: (userId: string) => Promise<Attempt[]>;
+  getGameSettings: () => Promise<GameSettings | null>;
+  adminLogin: (username: string, password: string) => Promise<boolean>;
+  resetUserAttempts: (userId: string) => Promise<boolean>;
+  changeAttemptsNumber: (number: number) => Promise<boolean>;
+  changeDiscountRanges: (ranges: DiscountRange[]) => Promise<boolean>;
+  getAllUsers: (search?: string) => Promise<User[]>;
+  exportUsers: (startDate: string, endDate: string) => Promise<User[]>;
+  logout: () => Promise<void>;
 }
 
 export const useSupabase = (): UseSupabaseReturn => {
-  const [loading, setLoading] = useState<boolean>(false)
-  const [user, setUser] = useLocalStorage<User | null>('userData', null)
-  const [token, setToken] = useLocalStorage<string | null>('userToken', null)
+  const [loading, setLoading] = useState<boolean>(false);
+  const [user, setUser] = useLocalStorage<User | null>("userData", null);
+  const [token, setToken] = useLocalStorage<string | null>("userToken", null);
 
   // Проверка существования пользователя по номеру телефона
   const checkPhoneExists = async (phone: string): Promise<boolean> => {
     try {
-      const { data, error } = await supabase.rpc('check_phone_exists', {
-        phone_number: phone
-      })
-      
-      if (error) {
-        console.error('Ошибка при проверке телефона:', error)
-        return false
-      }
-      
-      return data
-    } catch (error) {
-      console.error('Ошибка при проверке телефона:', error)
-      return false
-    }
-  }
+      const { data, error } = await supabase.rpc("check_phone_exists", {
+        phone_number: phone,
+      });
 
-  const registerUser = async (name: string, phone: string): Promise<User | null> => {
+      if (error) {
+        console.error("Ошибка при проверке телефона:", error);
+        return false;
+      }
+
+      return data;
+    } catch (error) {
+      console.error("Ошибка при проверке телефона:", error);
+      return false;
+    }
+  };
+
+  const registerUser = async (
+    name: string,
+    phone: string
+  ): Promise<User | null> => {
     try {
-      setLoading(true)
+      setLoading(true);
 
       // Регистрируем пользователя через RPC функцию
-      const { data, error } = await supabase.rpc('register_user', {
+      const { data, error } = await supabase.rpc("register_user", {
         user_name: name,
-        phone_number: phone
-      })
-      
+        phone_number: phone,
+      });
+
       if (error) {
-        console.error('Ошибка при регистрации:', error)
-        toast.error('Ошибка при регистрации пользователя')
-        return null
+        console.error("Ошибка при регистрации:", error);
+        toast.error("Ошибка при регистрации пользователя");
+        return null;
       }
-      
+
       if (!data.success) {
-        toast.error(data.message || 'Ошибка при регистрации')
-        return null
+        toast.error(data.message || "Ошибка при регистрации");
+        return null;
       }
-      if (!data.token) {
-        toast.error('Отсутствует JWT токен')
-        return null
+
+      // Проверяем наличие токенов в ответе
+      if (
+        !data.session ||
+        !data.session.access_token ||
+        !data.session.refresh_token
+      ) {
+        toast.error("Отсутствуют токены авторизации");
+        return null;
       }
-      
-      // Проверяем, что токен является строкой
-      if (typeof data.token !== 'string' || !data.token.trim()) {
-        console.error('Получен недействительный токен:', data.token)
-        toast.error('Ошибка авторизации: недействительный токен')
-        return null
-      }
-      
-      // Сохраняем токен напрямую в localStorage (без JSON.stringify)
-      localStorage.setItem('userToken', data.token)
-      
+
+      // Очищаем токены от пробелов и переносов строк
+      const cleanedAccessToken = cleanToken(data.session.access_token);
+      const cleanedRefreshToken = cleanToken(data.session.refresh_token);
+
+      // Сохраняем очищенные токены в localStorage
+      localStorage.setItem("access_token", cleanedAccessToken);
+      localStorage.setItem("refresh_token", cleanedRefreshToken);
+      setToken(cleanedAccessToken);
+
       // Сохраняем данные пользователя
-      setUser(data.user)
-      
-      const clientWithAuth = await updateAuthClient()
-      console.log('Клиент обновлен после регистрации')
-      
-      toast.success('Регистрация успешна!')
-      return data.user
+      setUser(data.user);
+
+      // Устанавливаем сессию с помощью очищенных токенов
+      const { error: sessionError } = await supabase.auth.setSession({
+        access_token: cleanedAccessToken,
+        refresh_token: cleanedRefreshToken,
+      });
+
+      if (sessionError) {
+        console.error("Ошибка при установке сессии:", sessionError);
+      } else {
+        console.log("Сессия успешно установлена");
+      }
+
+      // Обновляем клиент с новыми токенами
+      const clientWithAuth = await updateAuthClient();
+      console.log("Клиент обновлен после регистрации с новыми токенами");
+
+      toast.success("Регистрация успешна!");
+      return data.user;
     } catch (error) {
-      console.error('Ошибка при регистрации:', error)
-      toast.error('Произошла ошибка при регистрации')
-      return null
+      console.error("Ошибка при регистрации:", error);
+      toast.error("Произошла ошибка при регистрации");
+      return null;
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const loginUser = async (phone: string): Promise<User | null> => {
     try {
-      setLoading(true)
-      
-      // Входим через RPC функцию
-      const { data, error } = await supabase.rpc('login_user', {
-        phone_number: phone
-      })
-      
-      if (error) {
-        console.error('Ошибка при входе:', error)
-        toast.error('Ошибка при входе')
-        return null
-      }
-      
-      if (!data.success) {
-        toast.error(data.message || 'Пользователь не найден')
-        return null
-      }
-      if (!data.token) {
-        toast.error('Отсутствует JWT токен')
-        return null
-      }
-      
-      // Проверяем, что токен является строкой
-      if (typeof data.token !== 'string' || !data.token.trim()) {
-        console.error('Получен недействительный токен:', data.token)
-        toast.error('Ошибка авторизации: недействительный токен')
-        return null
-      }
-      
-      // Сохраняем токен напрямую в localStorage (без JSON.stringify)
-      localStorage.setItem('userToken', data.token)
-      
-      // Сохраняем данные пользователя
-      setUser(data.user)
-      
-      const clientWithAuth = await updateAuthClient()
-      console.log('Клиент обновлен после входа')
-      
-      toast.success('Вход выполнен успешно!')
-      return data.user
-    } catch (error) {
-      console.error('Ошибка при входе:', error)
-      toast.error('Произошла ошибка при входе')
-      return null
-    } finally {
-      setLoading(false)
-    }
-  }
+      setLoading(true);
 
-  const logout = () => {
-    try {
-      console.log('Выход из системы...')
-      
-      // Удаляем данные пользователя и токен
-      setUser(null)
-      setToken(null)
-      
-      // Удаляем данные из localStorage
-      localStorage.removeItem('userToken')
-      localStorage.removeItem('userData')
-      
-      // Обновляем клиент Supabase без токена
-      updateAuthClient()
-      console.log('Клиент обновлен после выхода')
-      
-      // Перенаправляем на страницу входа
-      window.location.href = '/'
+      // Входим через RPC функцию
+      const { data, error } = await supabase.rpc("login_user", {
+        phone_number: phone,
+      });
+
+      if (error) {
+        console.error("Ошибка при входе:", error);
+        toast.error("Ошибка при входе");
+        return null;
+      }
+
+      if (!data.success) {
+        toast.error(data.message || "Пользователь не найден");
+        return null;
+      }
+
+      // Проверяем наличие токенов в ответе
+      if (
+        !data.session ||
+        !data.session.access_token ||
+        !data.session.refresh_token
+      ) {
+        toast.error("Отсутствуют токены авторизации");
+        return null;
+      }
+      // Отладка токена
+      console.log("Полученный access_token:", data.session.access_token);
+
+      // Разбираем токен для отладки
+      const tokenParts = data.session.access_token.split(".");
+      if (tokenParts.length === 3) {
+        try {
+          const header = JSON.parse(atob(tokenParts[0]));
+          console.log("JWT Header:", header);
+
+          // Для payload используем специальную функцию декодирования base64url
+          const decodeBase64Url = (str: string) => {
+            // Преобразуем base64url в base64
+            const base64 = str.replace(/-/g, "+").replace(/_/g, "/");
+            // Декодируем base64
+            return decodeURIComponent(
+              atob(base64)
+                .split("")
+                .map((c) => {
+                  return "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2);
+                })
+                .join("")
+            );
+          };
+
+          try {
+            const payload = JSON.parse(decodeBase64Url(tokenParts[1]));
+            console.log("JWT Payload:", payload);
+          } catch (e) {
+            console.error("Ошибка при декодировании payload:", e);
+            console.log("Сырой payload:", tokenParts[1]);
+          }
+        } catch (e) {
+          console.error("Ошибка при разборе токена:", e);
+        }
+      } else {
+        console.error(
+          "Неверный формат токена, ожидается 3 части, получено:",
+          tokenParts.length
+        );
+      }
+
+      // Очищаем токены от пробелов и переносов строк
+      const cleanedAccessToken = cleanToken(data.session.access_token);
+      const cleanedRefreshToken = cleanToken(data.session.refresh_token);
+      console.log("Очищенный токен:", cleanedAccessToken);
+
+      // Сохраняем очищенные токены в localStorage
+      localStorage.setItem("access_token", cleanedAccessToken);
+      localStorage.setItem("refresh_token", cleanedRefreshToken);
+      setToken(cleanedAccessToken);
+
+      // Сохраняем данные пользователя
+      setUser(data.user);
+
+      // Устанавливаем сессию с помощью очищенных токенов
+      const { error: sessionError } = await supabase.auth.setSession({
+        access_token: cleanedAccessToken,
+        refresh_token: cleanedRefreshToken,
+      });
+
+      if (sessionError) {
+        console.error("Ошибка при установке сессии:", sessionError);
+      } else {
+        console.log("Сессия успешно установлена");
+      }
+
+      // Обновляем клиент с новыми токенами
+      const clientWithAuth = await updateAuthClient();
+      console.log("Клиент обновлен после входа с новыми токенами");
+
+      toast.success("Вход выполнен успешно!");
+      return data.user;
     } catch (error) {
-      console.error('Ошибка при выходе из системы:', error)
-      // Принудительно перенаправляем на страницу входа даже при ошибке
-      window.location.href = '/'
+      console.error("Ошибка при входе:", error);
+      toast.error("Произошла ошибка при входе");
+      return null;
+    } finally {
+      setLoading(false);
     }
-  }
+  };
+
+  const logout = async () => {
+    try {
+      console.log("Выход из системы...");
+
+      // Удаляем данные пользователя и токен
+      setUser(null);
+      setToken(null);
+
+      // Выход из сессии Supabase
+      await supabase.auth.signOut();
+
+      // Удаляем данные из localStorage
+      localStorage.removeItem("access_token");
+      localStorage.removeItem("refresh_token");
+      localStorage.removeItem("userData");
+
+      // Обновляем клиент Supabase без токена
+      await updateAuthClient();
+      console.log("Клиент обновлен после выхода");
+
+      // Перенаправляем на страницу входа
+      window.location.href = "/";
+    } catch (error) {
+      console.error("Ошибка при выходе из системы:", error);
+      // Принудительно перенаправляем на страницу входа даже при ошибке
+      window.location.href = "/";
+    }
+  };
 
   const getUser = async (userId: string): Promise<User | null> => {
     try {
-      // Проверяем наличие токена
-      const storedToken = localStorage.getItem('userToken')
-      if (!storedToken) {
-        console.error('Отсутствует токен авторизации')
-        toast.error('Ошибка авторизации: отсутствует токен')
-        
-        // Перенаправляем на страницу входа при отсутствии токена
+      // Проверяем наличие токенов
+      const accessToken = localStorage.getItem("access_token");
+      const refreshToken = localStorage.getItem("refresh_token");
+
+      if (!accessToken || !refreshToken) {
+        console.error("Отсутствуют токены авторизации");
+        toast.error("Ошибка авторизации: отсутствуют токены");
+
+        // Перенаправляем на страницу входа при отсутствии токенов
         // setTimeout(() => {
         //   logout()
         // }, 1000)
-        
-        return null
+
+        return null;
       }
-      
-      // Проверяем валидность токена
-      if (typeof storedToken !== 'string' || !storedToken.trim()) {
-        console.error('Недействительный токен:', storedToken)
-        toast.error('Ошибка авторизации: недействительный токен')
-        
-        // Удаляем недействительный токен и перенаправляем на страницу входа
-        // setTimeout(() => {
-        //   logout()
-        // }, 1000)
-        
-        return null
-      }
-      
+
       // Получаем клиент с токеном авторизации
       const clientWithAuth = await setupAuthHeaders();
-      
-      console.log('Запрос данных пользователя с ID:', userId)
+
+      console.log("Запрос данных пользователя с ID:", userId);
+      // Проверяем, что клиент успешно получен
+      if (!clientWithAuth) {
+        console.error("Не удалось получить авторизованный клиент");
+        toast.error("Ошибка авторизации: не удалось получить клиент");
+        return null;
+      }
+
       const { data, error } = await clientWithAuth
-        .from('users')
-        .select('*')
-        .eq('id', userId)
-        .single()
-      
+        .from("users")
+        .select("*")
+        .eq("id", userId)
+        .single();
+
       if (error) {
-        console.error('Ошибка при получении пользователя:', error)
-        
+        console.error("Ошибка при получении пользователя:", error);
+
         // Проверяем, связана ли ошибка с авторизацией
-        if (error.message.includes('JWT') || error.message.includes('token') ||
-            error.message.includes('auth') || error.message.includes('Headers')) {
-          toast.error('Ошибка авторизации. Выполняется выход из системы...')
-          
+        if (
+          error.message.includes("JWT") ||
+          error.message.includes("token") ||
+          error.message.includes("auth") ||
+          error.message.includes("Headers")
+        ) {
+          toast.error("Ошибка авторизации. Выполняется выход из системы...");
+
           // Перенаправляем на страницу входа при ошибке авторизации
           // setTimeout(() => {
           //   logout()
           // }, 1000)
         } else {
-          toast.error(`Ошибка при получении пользователя: ${error.message}`)
+          toast.error(`Ошибка при получении пользователя: ${error.message}`);
         }
-        
-        return null
+
+        return null;
       }
-      
+
       if (!data) {
-        console.error('Пользователь не найден')
-        toast.error('Пользователь не найден')
-        return null
+        console.error("Пользователь не найден");
+        toast.error("Пользователь не найден");
+        return null;
       }
-      
-      return data
+
+      return data;
     } catch (error) {
-      console.error('Ошибка при получении пользователя:', error)
-      
+      console.error("Ошибка при получении пользователя:", error);
+
       // Проверяем, связана ли ошибка с авторизацией
-      const errorMessage = error instanceof Error ? error.message : 'Неизвестная ошибка'
-      if (errorMessage.includes('JWT') || errorMessage.includes('token') ||
-          errorMessage.includes('auth') || errorMessage.includes('Headers')) {
-        toast.error('Ошибка авторизации. Выполняется выход из системы...')
-        
+      const errorMessage =
+        error instanceof Error ? error.message : "Неизвестная ошибка";
+      if (
+        errorMessage.includes("JWT") ||
+        errorMessage.includes("token") ||
+        errorMessage.includes("auth") ||
+        errorMessage.includes("Headers")
+      ) {
+        toast.error("Ошибка авторизации. Выполняется выход из системы...");
+
         // Перенаправляем на страницу входа при ошибке авторизации
         // setTimeout(() => {
         //   logout()
         // }, 1000)
       } else {
-        toast.error(`Произошла ошибка: ${errorMessage}`)
+        toast.error(`Произошла ошибка: ${errorMessage}`);
       }
-      
-      return null
-    }
-  }
 
-  const recordAttempt = async (userId: string, difference: number): Promise<boolean> => {
+      return null;
+    }
+  };
+
+  const recordAttempt = async (
+    userId: string,
+    difference: number
+  ): Promise<boolean> => {
     try {
-      setLoading(true)
-      
-      // Проверяем наличие токена
-      const storedToken = localStorage.getItem('userToken')
-      if (!storedToken) {
-        console.error('Отсутствует токен авторизации')
-        toast.error('Ошибка авторизации: отсутствует токен')
-        return false
+      setLoading(true);
+
+      // Проверяем наличие токенов
+      const accessToken = localStorage.getItem("access_token");
+      const refreshToken = localStorage.getItem("refresh_token");
+
+      if (!accessToken || !refreshToken) {
+        console.error("Отсутствуют токены авторизации");
+        toast.error("Ошибка авторизации: отсутствуют токены");
+        return false;
       }
-      
+
       // Получаем клиент с токеном авторизации
-      const clientWithAuth = await setupAuthHeaders()
-      console.log('Запись попытки для пользователя с ID:', userId)
-      
+      const clientWithAuth = await setupAuthHeaders();
+      console.log("Запись попытки для пользователя с ID:", userId);
+
+      // Проверяем, что клиент успешно получен
+      if (!clientWithAuth) {
+        console.error("Не удалось получить авторизованный клиент");
+        toast.error("Ошибка авторизации: не удалось получить клиент");
+        return false;
+      }
+
       // Получаем текущего пользователя
       const { data: user } = await clientWithAuth
-        .from('users')
-        .select('*')
-        .eq('id', userId)
-        .single()
-      
+        .from("users")
+        .select("*")
+        .eq("id", userId)
+        .single();
+
       if (!user || user.attempts_left <= 0) {
-        toast.error('Для продолжения игры необходимо использовать имеющуюся скидку в магазине.')
-        return false
+        toast.error(
+          "Для продолжения игры необходимо использовать имеющуюся скидку в магазине."
+        );
+        return false;
       }
-      
+
       // Получаем настройки игры для определения скидки
       const { data: settings } = await clientWithAuth
-        .from('game_settings')
-        .select('*')
-        .eq('id', 1)
-        .single()
-      
+        .from("game_settings")
+        .select("*")
+        .eq("id", 1)
+        .single();
+
       if (!settings) {
-        toast.error('Ошибка при получении настроек игры')
-        return false
+        toast.error("Ошибка при получении настроек игры");
+        return false;
       }
-      
+
       // Записываем попытку
       const { error: attemptError } = await clientWithAuth
-        .from('attempts')
-        .insert([
-          { user_id: userId, difference }
-        ])
-      
+        .from("attempts")
+        .insert([{ user_id: userId, difference }]);
+
       if (attemptError) {
-        console.error('Ошибка при записи попытки:', attemptError)
-        toast.error('Ошибка при записи попытки')
-        return false
+        console.error("Ошибка при записи попытки:", attemptError);
+        toast.error("Ошибка при записи попытки");
+        return false;
       }
-      
+
       // Определяем скидку на основе диапазонов
-      let discountValue = 3 // Минимальная скидка по умолчанию
-      
+      let discountValue = 3; // Минимальная скидка по умолчанию
+
       for (const range of settings.discount_ranges) {
-        if (difference >= range.min && (range.max === null || difference <= range.max)) {
-          discountValue = range.discount
-          break
+        if (
+          difference >= range.min &&
+          (range.max === null || difference <= range.max)
+        ) {
+          discountValue = range.discount;
+          break;
         }
       }
-      
+
       // Обновляем данные пользователя
-      const newAttemptsLeft = user.attempts_left - 1
-      const newBestResult = user.best_result === null || difference < user.best_result
-        ? difference
-        : user.best_result
-      
+      const newAttemptsLeft = user.attempts_left - 1;
+      const newBestResult =
+        user.best_result === null || difference < user.best_result
+          ? difference
+          : user.best_result;
+
       // Определяем новую скидку на основе лучшего результата
-      let newDiscount = 3
+      let newDiscount = 3;
       for (const range of settings.discount_ranges) {
-        if (newBestResult >= range.min && (range.max === null || newBestResult <= range.max)) {
-          newDiscount = range.discount
-          break
+        if (
+          newBestResult >= range.min &&
+          (range.max === null || newBestResult <= range.max)
+        ) {
+          newDiscount = range.discount;
+          break;
         }
       }
-      
+
       const { error: updateError } = await clientWithAuth
-        .from('users')
+        .from("users")
         .update({
           attempts_left: newAttemptsLeft,
           best_result: newBestResult,
-          discount: newDiscount
+          discount: newDiscount,
         })
-        .eq('id', userId)
-      
+        .eq("id", userId);
+
       if (updateError) {
-        console.error('Ошибка при обновлении пользователя:', updateError)
-        toast.error('Ошибка при обновлении данных пользователя')
-        return false
+        console.error("Ошибка при обновлении пользователя:", updateError);
+        toast.error("Ошибка при обновлении данных пользователя");
+        return false;
       }
-      
+
       // Обновляем пользователя в localStorage
       const updatedUser = {
         ...user,
         attempts_left: newAttemptsLeft,
         best_result: newBestResult,
-        discount: newDiscount
-      }
-      localStorage.setItem('userData', JSON.stringify(updatedUser))
-      
-      return true
+        discount: newDiscount,
+      };
+      localStorage.setItem("userData", JSON.stringify(updatedUser));
+
+      return true;
     } catch (error) {
-      console.error('Ошибка при записи попытки:', error)
-      toast.error('Произошла ошибка при записи попытки')
-      return false
+      console.error("Ошибка при записи попытки:", error);
+      toast.error("Произошла ошибка при записи попытки");
+      return false;
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const getUserAttempts = async (userId: string): Promise<Attempt[]> => {
     try {
-      // Проверяем наличие токена
-      const storedToken = localStorage.getItem('userToken')
-      if (!storedToken) {
-        console.error('Отсутствует токен авторизации')
-        toast.error('Ошибка авторизации: отсутствует токен')
-        
-        // Перенаправляем на страницу входа при отсутствии токена
+      // Проверяем наличие токенов
+      const accessToken = localStorage.getItem("access_token");
+      const refreshToken = localStorage.getItem("refresh_token");
+
+      if (!accessToken || !refreshToken) {
+        console.error("Отсутствуют токены авторизации");
+        toast.error("Ошибка авторизации: отсутствуют токены");
+
+        // Перенаправляем на страницу входа при отсутствии токенов
         // setTimeout(() => {
         //   logout()
         // }, 1000)
-        
-        return []
+
+        return [];
       }
-      
-      // Проверяем валидность токена
-      if (typeof storedToken !== 'string' || !storedToken.trim()) {
-        console.error('Недействительный токен:', storedToken)
-        toast.error('Ошибка авторизации: недействительный токен')
-        
-        // Удаляем недействительный токен и перенаправляем на страницу входа
-        // setTimeout(() => {
-        //   logout()
-        // }, 1000)
-        
-        return []
-      }
-      
+
       // Получаем клиент с токеном авторизации
       const client = await setupAuthHeaders();
-      
-      console.log('Запрос попыток пользователя с ID:', userId)
+
+      console.log("Запрос попыток пользователя с ID:", userId);
+      // Проверяем, что клиент успешно получен
+      if (!client) {
+        console.error("Не удалось получить авторизованный клиент");
+        toast.error("Ошибка авторизации: не удалось получить клиент");
+        return [];
+      }
+
       const { data, error } = await client
-        .from('attempts')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: true })
-      
+        .from("attempts")
+        .select("*")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: true });
+
       if (error) {
-        console.error('Ошибка при получении попыток:', error)
-        
+        console.error("Ошибка при получении попыток:", error);
+
         // Проверяем, связана ли ошибка с авторизацией
-        if (error.message.includes('JWT') || error.message.includes('token') ||
-            error.message.includes('auth') || error.message.includes('Headers')) {
-          toast.error('Ошибка авторизации. Выполняется выход из системы...')
-          
+        if (
+          error.message.includes("JWT") ||
+          error.message.includes("token") ||
+          error.message.includes("auth") ||
+          error.message.includes("Headers")
+        ) {
+          toast.error("Ошибка авторизации. Выполняется выход из системы...");
+
           // Перенаправляем на страницу входа при ошибке авторизации
           // setTimeout(() => {
           //   logout()
           // }, 1000)
         } else {
-          toast.error(`Ошибка при получении попыток: ${error.message}`)
+          toast.error(`Ошибка при получении попыток: ${error.message}`);
         }
-        
-        return []
+
+        return [];
       }
-      
-      return data || []
+
+      return data || [];
     } catch (error) {
-      console.error('Ошибка при получении попыток:', error)
-      
+      console.error("Ошибка при получении попыток:", error);
+
       // Проверяем, связана ли ошибка с авторизацией
-      const errorMessage = error instanceof Error ? error.message : 'Неизвестная ошибка'
-      if (errorMessage.includes('JWT') || errorMessage.includes('token') ||
-          errorMessage.includes('auth') || errorMessage.includes('Headers')) {
-        toast.error('Ошибка авторизации. Выполняется выход из системы...')
-        
+      const errorMessage =
+        error instanceof Error ? error.message : "Неизвестная ошибка";
+      if (
+        errorMessage.includes("JWT") ||
+        errorMessage.includes("token") ||
+        errorMessage.includes("auth") ||
+        errorMessage.includes("Headers")
+      ) {
+        toast.error("Ошибка авторизации. Выполняется выход из системы...");
+
         // Перенаправляем на страницу входа при ошибке авторизации
         // setTimeout(() => {
         //   logout()
         // }, 1000)
       } else {
-        toast.error(`Произошла ошибка: ${errorMessage}`)
+        toast.error(`Произошла ошибка: ${errorMessage}`);
       }
-      
-      return []
+
+      return [];
     }
-  }
+  };
 
   const getGameSettings = async (): Promise<GameSettings | null> => {
     try {
       // Получаем клиент с токеном авторизации
-      const clientWithAuth = await setupAuthHeaders()
-      
-      const { data, error } = await clientWithAuth
-        .from('game_settings')
-        .select('*')
-        .eq('id', 1)
-        .single()
-      
-      if (error) {
-        console.error('Ошибка при получении настроек игры:', error)
-        return null
-      }
-      
-      return data
-    } catch (error) {
-      console.error('Ошибка при получении настроек игры:', error)
-      return null
-    }
-  }
+      const clientWithAuth = await setupAuthHeaders();
 
-  const adminLogin = async (username: string, password: string): Promise<boolean> => {
-    try {
-      setLoading(true)
-      
-      // Используем RPC функцию для входа администратора
-      const { data, error } = await supabase.rpc('admin_login', {
-        admin_username: username,
-        input_password: password
-      })
-      
+      // Проверяем, что клиент успешно получен
+      if (!clientWithAuth) {
+        console.error("Не удалось получить авторизованный клиент");
+        toast.error("Ошибка авторизации: не удалось получить клиент");
+        return null;
+      }
+
+      const { data, error } = await clientWithAuth
+        .from("game_settings")
+        .select("*")
+        .eq("id", 1)
+        .single();
+
       if (error) {
-        console.error('Ошибка при входе в админ-панель:', error)
-        toast.error('Ошибка при входе в админ-панель')
-        return false
+        console.error("Ошибка при получении настроек игры:", error);
+        return null;
       }
-      
-      if (!data.success) {
-        toast.error(data.message || 'Ошибка при входе')
-        return false
-      }
-      
-      // Сохраняем токен и данные администратора
-      localStorage.setItem('adminToken', data.token)
-      localStorage.setItem('adminData', JSON.stringify(data.admin))
-      localStorage.setItem('isAdmin', 'true')
-      
-      toast.success('Вход в админ-панель выполнен успешно!')
-      return true
+
+      return data;
     } catch (error) {
-      console.error('Ошибка при входе в админ-панель:', error)
-      toast.error('Произошла ошибка при входе в админ-панель')
-      return false
-    } finally {
-      setLoading(false)
+      console.error("Ошибка при получении настроек игры:", error);
+      return null;
     }
-  }
+  };
+
+  const adminLogin = async (
+    username: string,
+    password: string
+  ): Promise<boolean> => {
+    try {
+      setLoading(true);
+
+      // Используем RPC функцию для входа администратора
+      const { data, error } = await supabase.rpc("admin_login", {
+        admin_username: username,
+        input_password: password,
+      });
+
+      if (error) {
+        console.error("Ошибка при входе в админ-панель:", error);
+        toast.error("Ошибка при входе в админ-панель");
+        return false;
+      }
+
+      if (!data.success) {
+        toast.error(data.message || "Ошибка при входе");
+        return false;
+      }
+
+      // Сохраняем токен и данные администратора
+      localStorage.setItem("adminToken", data.token);
+      localStorage.setItem("adminData", JSON.stringify(data.admin));
+      localStorage.setItem("isAdmin", "true");
+
+      toast.success("Вход в админ-панель выполнен успешно!");
+      return true;
+    } catch (error) {
+      console.error("Ошибка при входе в админ-панель:", error);
+      toast.error("Произошла ошибка при входе в админ-панель");
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const resetUserAttempts = async (userId: string): Promise<boolean> => {
     try {
-      setLoading(true)
-      
+      setLoading(true);
+
       // Получаем клиент с токеном авторизации
-      const clientWithAuth = await setupAuthHeaders()
-      
+      const clientWithAuth = await setupAuthHeaders();
+
+      // Проверяем, что клиент успешно получен
+      if (!clientWithAuth) {
+        console.error("Не удалось получить авторизованный клиент");
+        toast.error("Ошибка авторизации: не удалось получить клиент");
+        return false;
+      }
+
       // Получаем настройки игры для установки количества попыток
       const { data: settings } = await clientWithAuth
-        .from('game_settings')
-        .select('*')
-        .eq('id', 1)
-        .single()
-      
-      const attemptsNumber = settings?.attempts_number || 10
-      
+        .from("game_settings")
+        .select("*")
+        .eq("id", 1)
+        .single();
+
+      const attemptsNumber = settings?.attempts_number || 10;
+
       // Сбрасываем попытки пользователя
       const { error } = await clientWithAuth
-        .from('users')
+        .from("users")
         .update({ attempts_left: attemptsNumber })
-        .eq('id', userId)
-      
+        .eq("id", userId);
+
       if (error) {
-        console.error('Ошибка при сбросе попыток:', error)
-        toast.error('Ошибка при сбросе попыток пользователя')
-        return false
+        console.error("Ошибка при сбросе попыток:", error);
+        toast.error("Ошибка при сбросе попыток пользователя");
+        return false;
       }
-      
-      toast.success('Попытки пользователя успешно сброшены!')
-      return true
+
+      toast.success("Попытки пользователя успешно сброшены!");
+      return true;
     } catch (error) {
-      console.error('Ошибка при сбросе попыток:', error)
-      toast.error('Произошла ошибка при сбросе попыток')
-      return false
+      console.error("Ошибка при сбросе попыток:", error);
+      toast.error("Произошла ошибка при сбросе попыток");
+      return false;
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const changeAttemptsNumber = async (number: number): Promise<boolean> => {
     try {
-      setLoading(true)
-      
+      setLoading(true);
+
       // Получаем клиент с токеном авторизации
-      const clientWithAuth = await setupAuthHeaders()
-      
+      const clientWithAuth = await setupAuthHeaders();
+
+      // Проверяем, что клиент успешно получен
+      if (!clientWithAuth) {
+        console.error("Не удалось получить авторизованный клиент");
+        toast.error("Ошибка авторизации: не удалось получить клиент");
+        return false;
+      }
+
       // Обновляем количество попыток в настройках
       const { error } = await clientWithAuth
-        .from('game_settings')
+        .from("game_settings")
         .update({ attempts_number: number })
-        .eq('id', 1)
-      
-      if (error) {
-        console.error('Ошибка при изменении количества попыток:', error)
-        toast.error('Ошибка при изменении количества попыток')
-        return false
-      }
-      
-      toast.success('Количество попыток успешно изменено!')
-      return true
-    } catch (error) {
-      console.error('Ошибка при изменении количества попыток:', error)
-      toast.error('Произошла ошибка при изменении количества попыток')
-      return false
-    } finally {
-      setLoading(false)
-    }
-  }
+        .eq("id", 1);
 
-  const changeDiscountRanges = async (ranges: DiscountRange[]): Promise<boolean> => {
+      if (error) {
+        console.error("Ошибка при изменении количества попыток:", error);
+        toast.error("Ошибка при изменении количества попыток");
+        return false;
+      }
+
+      toast.success("Количество попыток успешно изменено!");
+      return true;
+    } catch (error) {
+      console.error("Ошибка при изменении количества попыток:", error);
+      toast.error("Произошла ошибка при изменении количества попыток");
+      return false;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const changeDiscountRanges = async (
+    ranges: DiscountRange[]
+  ): Promise<boolean> => {
     try {
-      setLoading(true)
-      
+      setLoading(true);
+
       // Получаем клиент с токеном авторизации
-      const clientWithAuth = await setupAuthHeaders()
-      
+      const clientWithAuth = await setupAuthHeaders();
+
+      // Проверяем, что клиент успешно получен
+      if (!clientWithAuth) {
+        console.error("Не удалось получить авторизованный клиент");
+        toast.error("Ошибка авторизации: не удалось получить клиент");
+        return false;
+      }
+
       // Обновляем диапазоны скидок в настройках
       const { error } = await clientWithAuth
-        .from('game_settings')
+        .from("game_settings")
         .update({ discount_ranges: ranges })
-        .eq('id', 1)
-      
+        .eq("id", 1);
+
       if (error) {
-        console.error('Ошибка при изменении диапазонов скидок:', error)
-        toast.error('Ошибка при изменении диапазонов скидок')
-        return false
+        console.error("Ошибка при изменении диапазонов скидок:", error);
+        toast.error("Ошибка при изменении диапазонов скидок");
+        return false;
       }
-      
-      toast.success('Диапазоны скидок успешно изменены!')
-      return true
+
+      toast.success("Диапазоны скидок успешно изменены!");
+      return true;
     } catch (error) {
-      console.error('Ошибка при изменении диапазонов скидок:', error)
-      toast.error('Произошла ошибка при изменении диапазонов скидок')
-      return false
+      console.error("Ошибка при изменении диапазонов скидок:", error);
+      toast.error("Произошла ошибка при изменении диапазонов скидок");
+      return false;
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   const getAllUsers = async (search?: string): Promise<User[]> => {
     try {
       // Получаем клиент с токеном авторизации
-      const clientWithAuth = await setupAuthHeaders()
-      
-      let query = clientWithAuth
-        .from('users')
-        .select('*')
-        .order('created_at', { ascending: false })
-      
-      if (search) {
-        query = query.or(`name.ilike.%${search}%,phone.ilike.%${search}%`)
-      }
-      
-      const { data, error } = await query
-      
-      if (error) {
-        console.error('Ошибка при получении пользователей:', error)
-        return []
-      }
-      
-      return data || []
-    } catch (error) {
-      console.error('Ошибка при получении пользователей:', error)
-      return []
-    }
-  }
+      const clientWithAuth = await setupAuthHeaders();
 
-  const exportUsers = async (startDate: string, endDate: string): Promise<User[]> => {
+      // Проверяем, что клиент успешно получен
+      if (!clientWithAuth) {
+        console.error("Не удалось получить авторизованный клиент");
+        toast.error("Ошибка авторизации: не удалось получить клиент");
+        return [];
+      }
+
+      let query = clientWithAuth
+        .from("users")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (search) {
+        query = query.or(`name.ilike.%${search}%,phone.ilike.%${search}%`);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        console.error("Ошибка при получении пользователей:", error);
+        return [];
+      }
+
+      return data || [];
+    } catch (error) {
+      console.error("Ошибка при получении пользователей:", error);
+      return [];
+    }
+  };
+
+  const exportUsers = async (
+    startDate: string,
+    endDate: string
+  ): Promise<User[]> => {
     try {
       // Получаем клиент с токеном авторизации
-      const clientWithAuth = await setupAuthHeaders()
-      
-      const { data, error } = await clientWithAuth
-        .from('users')
-        .select('*')
-        .gte('created_at', startDate)
-        .lte('created_at', endDate)
-        .order('created_at', { ascending: false })
-      
-      if (error) {
-        console.error('Ошибка при экспорте пользователей:', error)
-        return []
+      const clientWithAuth = await setupAuthHeaders();
+
+      // Проверяем, что клиент успешно получен
+      if (!clientWithAuth) {
+        console.error("Не удалось получить авторизованный клиент");
+        toast.error("Ошибка авторизации: не удалось получить клиент");
+        return [];
       }
-      
-      return data || []
+
+      const { data, error } = await clientWithAuth
+        .from("users")
+        .select("*")
+        .gte("created_at", startDate)
+        .lte("created_at", endDate)
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.error("Ошибка при экспорте пользователей:", error);
+        return [];
+      }
+
+      return data || [];
     } catch (error) {
-      console.error('Ошибка при экспорте пользователей:', error)
-      return []
+      console.error("Ошибка при экспорте пользователей:", error);
+      return [];
     }
-  }
+  };
 
   return {
     registerUser,
@@ -676,6 +845,6 @@ export const useSupabase = (): UseSupabaseReturn => {
     changeDiscountRanges,
     getAllUsers,
     exportUsers,
-    logout
-  }
-}
+    logout,
+  };
+};

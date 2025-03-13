@@ -26,46 +26,63 @@ export const supabase = createClient<Database>(
   }
 )
 
+// Функция для очистки токена от пробелов и переносов строк
+export const cleanToken = (token: string): string => {
+  return token.replace(/[\s\n\r]+/g, '');
+};
+
 export const setupAuthHeaders = async () => {
-  let token = localStorage.getItem('userToken');
+  let access_token = localStorage.getItem('access_token');
+  let refresh_token = localStorage.getItem('refresh_token');
 
-  if (!token) {
-    console.log('Токен отсутствует, создание клиента без авторизации');
+  if (!access_token || !refresh_token) {
+    console.log('Токены отсутствуют, создание клиента без авторизации');
     return supabase;
   }
 
-  // Если токен в localStorage в формате JSON строки, парсим его
-  if (token.startsWith('"') && token.endsWith('"')) {
-    token = JSON.parse(token);
-  }
+  // Очищаем токены от пробелов и переносов строк
+  access_token = cleanToken(access_token);
+  refresh_token = cleanToken(refresh_token);
 
-  if (typeof token !== 'string' || !token.trim()) {
-    console.error('Недействительный токен:', token);
-    return supabase;
-  }
+  // Обновляем токены в localStorage
+  localStorage.setItem('access_token', access_token);
+  localStorage.setItem('refresh_token', refresh_token);
 
-  console.log('Аутентификация через signInWithToken');
+  console.log('Установка сессии с помощью access_token и refresh_token');
   try {
-    const { data, error } = await supabase.auth.signInWithIdToken(token);
+    // Используем новый метод setSession для установки сессии
+    const { data, error } = await supabase.auth.setSession({
+      access_token,
+      refresh_token
+    });
+    
     if (error) {
-      console.error('Ошибка аутентификации через signInWithToken:', error);
+      console.error('Ошибка при установке сессии:', error);
     } else {
-      console.log('Аутентификация успешна:', data);
+      console.log('Сессия успешно установлена:', data);
     }
   } catch (error) {
-    console.error('Ошибка в signInWithToken:', error);
+    console.error('Ошибка при установке сессии:', error);
   }
+  
   return supabase;
 }
 
 // Инициализируем клиент с токеном, если он есть в localStorage
-export let supabaseWithAuth = setupAuthHeaders()
+export let supabaseWithAuth = supabase
 
 // Функция для обновления клиента с токеном
-export const updateAuthClient = () => {
-  supabaseWithAuth = setupAuthHeaders()
+export const updateAuthClient = async () => {
+  supabaseWithAuth = await setupAuthHeaders()
   return supabaseWithAuth
 }
+
+// Инициализируем клиент при загрузке
+setupAuthHeaders().then(client => {
+  supabaseWithAuth = client
+}).catch(error => {
+  console.error('Ошибка при инициализации клиента:', error)
+})
 
 // Функция для обновления JWT Secret
 export const updateJwtSecret = (secret: string) => {
