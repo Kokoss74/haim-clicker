@@ -24,18 +24,30 @@ const Game: React.FC<GameProps> = ({ user }) => {
     
     // Загружаем попытки пользователя при монтировании компонента
     const loadAttempts = async () => {
-      const userAttempts = await getUserAttempts(user.id)
-      setAttempts(userAttempts)
-      
-      // Обновляем данные пользователя
-      const updatedUser = await getUser(user.id)
-      if (updatedUser) {
-        setCurrentUser(updatedUser)
-      }
-      
-      // Если у пользователя закончились попытки, находим лучший результат
-      if (updatedUser && updatedUser.attempts_left <= 0) {
-        findBestResult(userAttempts)
+      try {
+        console.log('Загрузка попыток пользователя...')
+        const userAttempts = await getUserAttempts(user.id)
+        console.log('Попытки пользователя:', userAttempts)
+        setAttempts(userAttempts)
+        
+        // Обновляем данные пользователя
+        console.log('Получение данных пользователя...')
+        const updatedUser = await getUser(user.id)
+        console.log('Данные пользователя:', updatedUser)
+        
+        if (updatedUser) {
+          setCurrentUser(updatedUser)
+          
+          // Если у пользователя закончились попытки, находим лучший результат
+          if (updatedUser.attempts_left <= 0) {
+            findBestResult(userAttempts)
+          }
+        } else {
+          toast.error('Не удалось получить данные пользователя')
+        }
+      } catch (error) {
+        console.error('Ошибка при загрузке данных:', error)
+        toast.error('Ошибка при загрузке данных пользователя')
       }
     }
     
@@ -74,33 +86,56 @@ const Game: React.FC<GameProps> = ({ user }) => {
   }, [attempts])
   
   const handleAttempt = async () => {
-    if (currentUser.attempts_left <= 0) {
-      toast.error(`Для продолжения игры необходимо использовать имеющуюся скидку ${currentUser.discount}% в магазине.`);
-      return;
-    }
-
-    stopTimer();
-
-    // Вычисляем отклонение от целой секунды
-    const diff: number = milliseconds < 500 ? milliseconds : 1000 - milliseconds;
-    const success: boolean = await recordAttempt(user.id, diff);
-    if (success) {
-      const userAttempts = await getUserAttempts(user.id);
-      setAttempts(userAttempts);
-
-      // Обновляем данные пользователя
-      const updatedUser = await getUser(user.id);
-      if (updatedUser) {
-        setCurrentUser(updatedUser);
-
-        // Проверяем, закончились ли попытки у пользователя
-        if (updatedUser.attempts_left <= 0) {
-          findBestResult(userAttempts);
-        }
+    try {
+      if (currentUser.attempts_left <= 0) {
+        toast.error(`Для продолжения игры необходимо использовать имеющуюся скидку ${currentUser.discount}% в магазине.`);
+        return;
       }
+
+      stopTimer();
+
+      // Проверяем наличие токена
+      const token = localStorage.getItem('userToken');
+      if (!token) {
+        console.error('Отсутствует токен авторизации');
+        toast.error('Ошибка авторизации: отсутствует токен');
+        return;
+      }
+
+      console.log('Запись попытки...');
+      // Вычисляем отклонение от целой секунды
+      const diff: number = milliseconds < 500 ? milliseconds : 1000 - milliseconds;
+      const success: boolean = await recordAttempt(user.id, diff);
+      
+      if (success) {
+        console.log('Попытка успешно записана, получение списка попыток...');
+        const userAttempts = await getUserAttempts(user.id);
+        setAttempts(userAttempts);
+
+        // Обновляем данные пользователя
+        console.log('Обновление данных пользователя...');
+        const updatedUser = await getUser(user.id);
+        if (updatedUser) {
+          console.log('Данные пользователя обновлены:', updatedUser);
+          setCurrentUser(updatedUser);
+
+          // Проверяем, закончились ли попытки у пользователя
+          if (updatedUser.attempts_left <= 0) {
+            findBestResult(userAttempts);
+          }
+        } else {
+          console.error('Не удалось получить обновленные данные пользователя');
+        }
+      } else {
+        console.error('Не удалось записать попытку');
+      }
+    } catch (error) {
+      console.error('Ошибка при обработке попытки:', error);
+      toast.error('Произошла ошибка при обработке попытки');
+    } finally {
+      resetTimer();
+      startTimer();
     }
-    resetTimer()
-    startTimer()
   }
 
   return (

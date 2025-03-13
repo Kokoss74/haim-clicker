@@ -13,13 +13,13 @@ function App() {
 
   useEffect(() => {
     // Проверяем наличие пользователя в localStorage
-    const storedUser = localStorage.getItem('user')
+    const storedUser = localStorage.getItem('userData')
     if (storedUser) {
       try {
         setUser(JSON.parse(storedUser))
       } catch (error) {
         console.error('Ошибка при парсинге пользователя из localStorage:', error)
-        localStorage.removeItem('user')
+        localStorage.removeItem('userData')
       }
     }
     
@@ -30,7 +30,7 @@ function App() {
       (event, session) => {
         if (event === 'SIGNED_OUT') {
           setUser(null)
-          localStorage.removeItem('user')
+          localStorage.removeItem('userData')
           toast.info('Вы вышли из системы')
         }
       }

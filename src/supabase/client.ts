@@ -28,9 +28,19 @@ export const supabase = createClient<Database>(
 
 // Функция для добавления токена к запросам
 export const setupAuthHeaders = () => {
-  const token = localStorage.getItem('userToken')
+  let token = localStorage.getItem('userToken')
+  
+  // Если токен в localStorage в формате JSON строки, парсим его
+  if (token && (token.startsWith('"') && token.endsWith('"'))) {
+    try {
+      token = JSON.parse(token)
+    } catch (error) {
+      console.error('Ошибка при парсинге токена:', error)
+    }
+  }
   
   if (token) {
+    console.log('Создание клиента с токеном авторизации')
     // Создаем новый экземпляр клиента с заголовком авторизации
     // Это более надежный способ для пользовательской авторизации
     return createClient<Database>(
@@ -50,12 +60,18 @@ export const setupAuthHeaders = () => {
       }
     )
   }
+  console.log('Создание клиента без токена авторизации')
   return supabase
 }
 
 // Инициализируем клиент с токеном, если он есть в localStorage
-const initialClient = setupAuthHeaders()
-export let supabaseWithAuth = initialClient
+export let supabaseWithAuth = setupAuthHeaders()
+
+// Функция для обновления клиента с токеном
+export const updateAuthClient = () => {
+  supabaseWithAuth = setupAuthHeaders()
+  return supabaseWithAuth
+}
 
 // Функция для обновления JWT Secret
 export const updateJwtSecret = (secret: string) => {
