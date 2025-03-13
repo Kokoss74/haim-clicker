@@ -27,7 +27,7 @@ export const useSupabase = (): UseSupabaseReturn => {
   const registerUser = async (name: string, phone: string): Promise<User | null> => {
     try {
       setLoading(true)
-      
+
       // Проверяем, существует ли пользователь с таким телефоном
       const { data: existingUser } = await supabase
         .from('users')

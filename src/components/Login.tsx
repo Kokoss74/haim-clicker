@@ -19,15 +19,15 @@ const Login: React.FC<LoginProps> = ({ setUser }) => {
     // Регулярное выражение для проверки израильского номера телефона
     // Поддерживает форматы:
     // - 05X-XXXXXXX или 05XXXXXXXX (мобильные)
-    // - +972-5X-XXXXXXX или +9725XXXXXXXX (международный формат)
-    const israeliPhoneRegex = /^(?:(?:\+972|0)(?:-)?(?:5|7|8|9))(?:\d{7,9})$/;
+    // - +9725X-XXXXXXX или +9725XXXXXXXX (международный формат)
+    const israeliPhoneRegex = /^(?:(?:\+972|0)(?:-)?(?:5|7|8|9))(\d{7,9})$/;
     return israeliPhoneRegex.test(phone.replace(/\s|-/g, ""));
   };
 
-  // Функция для форматирования номера телефона (удаление лишних символов)
   const formatPhoneNumber = (phone: string): string => {
     return phone.replace(/\s|-|\(|\)/g, "");
   };
+
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
@@ -38,23 +38,26 @@ const Login: React.FC<LoginProps> = ({ setUser }) => {
   const handleCheckUser = async () => {
     // Форматируем номер телефона
     const formattedPhone = formatPhoneNumber(phoneNumber);
-    
+
     // Проверяем формат номера
     if (!validateIsraeliPhoneNumber(formattedPhone)) {
-      setPhoneError("Неверный формат номера телефона. Введите номер в израильском формате (например, 050-1234567)");
+      setPhoneError(
+        "Неверный формат номера телефона. Введите номер в израильском формате (например, 050-1234567 или +972-501234567)"
+      );
       return;
     }
 
     // Проверка наличия пользователя в базе данных
-    const user = await loginUser(formattedPhone);
-    
-    if (user) {
-      // Пользователь существует, устанавливаем его в состояние
-      setUser(user);
-    } else {
-      // Пользователь не зарегистрирован, показываем форму регистрации
-      setShowRegistration(true);
-    }
+    const formattedPhoneForCheck = formattedPhone.startsWith("0") ? "+972" + formattedPhone.slice(1) : formattedPhone;
+    const user = await loginUser(formattedPhoneForCheck);
+
+      if (user) {
+        // Пользователь существует, устанавливаем его в состояние
+        setUser(user);
+      } else {
+        // Пользователь не зарегистрирован, показываем форму регистрации
+        setShowRegistration(true);
+      }
   };
 
   const handleRegister = async () => {
@@ -66,16 +69,22 @@ const Login: React.FC<LoginProps> = ({ setUser }) => {
 
     // Форматируем номер телефона
     const formattedPhone = formatPhoneNumber(phoneNumber);
-    
+
     // Проверяем формат номера еще раз
     if (!validateIsraeliPhoneNumber(formattedPhone)) {
-      setPhoneError("Неверный формат номера телефона. Введите номер в израильском формате (например, 050-1234567)");
+      setPhoneError(
+        "Неверный формат номера телефона. Введите номер в израильском формате (например, 050-1234567 или +972-501234567)"
+      );
       return;
     }
 
+    // Форматируем номер телефона для сохранения в базе данных
+    const formattedPhoneForDB =
+      "+972" + formattedPhone.slice(formattedPhone.startsWith("0") ? 1 : 0);
+
     // Регистрация пользователя
-    const user = await registerUser(name, formattedPhone);
-    
+    const user = await registerUser(name, formattedPhoneForDB);
+
     if (user) {
       // Успешная регистрация, устанавливаем пользователя в состояние
       setUser(user);
@@ -122,7 +131,7 @@ const Login: React.FC<LoginProps> = ({ setUser }) => {
             <input
               id="phone"
               type="tel"
-              placeholder="Например: 050-1234567"
+              placeholder="Например: 050-1234567 или +972-501234567"
               value={phoneNumber}
               onChange={handlePhoneChange}
               className={phoneError ? "error" : ""}
