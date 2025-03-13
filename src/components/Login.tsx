@@ -1,81 +1,135 @@
 import React, { useState } from "react";
-import { supabase } from "../supabase/client";
+import { useSupabase } from "../hooks/useSupabase";
+import { User } from "../types/user";
+import { toast } from "react-toastify";
 
 interface LoginProps {
-  setUser: (user: any) => void;
+  setUser: (user: User) => void;
 }
 
 const Login: React.FC<LoginProps> = ({ setUser }) => {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [name, setName] = useState("");
-  const [isRegistered, setIsRegistered] = useState(false);
+  const [showRegistration, setShowRegistration] = useState(false);
+  const [phoneError, setPhoneError] = useState("");
+  const { loginUser, registerUser } = useSupabase();
 
-  const handleLogin = async () => {
-    // Проверка наличия пользователя в базе данных
-    const { data, error } = await supabase
-      .from("users")
-      .select("*")
-      .eq("phone_number", phoneNumber)
-      .single();
+  // Функция для валидации израильского номера телефона
+  const validateIsraeliPhoneNumber = (phone: string): boolean => {
+    // Регулярное выражение для проверки израильского номера телефона
+    // Поддерживает форматы:
+    // - 05X-XXXXXXX или 05XXXXXXXX (мобильные)
+    // - +972-5X-XXXXXXX или +9725XXXXXXXX (международный формат)
+    const israeliPhoneRegex = /^(?:(?:\+972|0)(?:-)?(?:5|7|8|9))(?:\d{7,9})$/;
+    return israeliPhoneRegex.test(phone.replace(/\s|-/g, ""));
+  };
 
-    if (error) {
-      console.error("Ошибка при проверке пользователя:", error);
-      alert("Ошибка при входе. Попробуйте еще раз.");
+  // Функция для форматирования номера телефона (удаление лишних символов)
+  const formatPhoneNumber = (phone: string): string => {
+    return phone.replace(/\s|-|\(|\)/g, "");
+  };
+
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const value = e.target.value;
+    setPhoneNumber(value);
+    setPhoneError("");
+  };
+
+  const handleCheckUser = async () => {
+    // Форматируем номер телефона
+    const formattedPhone = formatPhoneNumber(phoneNumber);
+    
+    // Проверяем формат номера
+    if (!validateIsraeliPhoneNumber(formattedPhone)) {
+      setPhoneError("Неверный формат номера телефона. Введите номер в израильском формате (например, 050-1234567)");
       return;
     }
 
-    if (data) {
+    // Проверка наличия пользователя в базе данных
+    const user = await loginUser(formattedPhone);
+    
+    if (user) {
       // Пользователь существует, устанавливаем его в состояние
-      setUser(data);
-      localStorage.setItem("user", JSON.stringify(data));
+      setUser(user);
     } else {
       // Пользователь не зарегистрирован, показываем форму регистрации
-      setIsRegistered(true);
+      setShowRegistration(true);
     }
   };
 
   const handleRegister = async () => {
-    // Регистрация пользователя
-    const { data, error } = await supabase
-      .from("users")
-      .insert([{ phone_number: phoneNumber, name: name }])
-      .select()
-      .single();
-
-    if (error) {
-      console.error("Ошибка при регистрации:", error);
-      alert("Ошибка при регистрации. Попробуйте еще раз.");
+    // Проверяем, что имя не пустое
+    if (!name.trim()) {
+      toast.error("Введите ваше имя");
       return;
     }
 
-    // Успешная регистрация, устанавливаем пользователя в состояние
-    setUser(data);
-    localStorage.setItem("user", JSON.stringify(data));
-    setIsRegistered(false);
+    // Форматируем номер телефона
+    const formattedPhone = formatPhoneNumber(phoneNumber);
+    
+    // Проверяем формат номера еще раз
+    if (!validateIsraeliPhoneNumber(formattedPhone)) {
+      setPhoneError("Неверный формат номера телефона. Введите номер в израильском формате (например, 050-1234567)");
+      return;
+    }
+
+    // Регистрация пользователя
+    const user = await registerUser(name, formattedPhone);
+    
+    if (user) {
+      // Успешная регистрация, устанавливаем пользователя в состояние
+      setUser(user);
+      setShowRegistration(false);
+    }
   };
 
   return (
-    <div>
+    <div className="login-container">
       <h2>Вход/Регистрация</h2>
-      {isRegistered ? (
-        <div>
-          <input
-            type="text"
-            placeholder="Имя"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-          <button onClick={handleRegister}>Зарегистрироваться</button>
+      {showRegistration ? (
+        <div className="registration-form">
+          <div className="form-group">
+            <label htmlFor="name">Имя</label>
+            <input
+              id="name"
+              type="text"
+              placeholder="Введите ваше имя"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </div>
+          <div className="form-group">
+            <label htmlFor="phone">Номер телефона</label>
+            <input
+              id="phone"
+              type="tel"
+              placeholder="Например: 050-1234567"
+              value={phoneNumber}
+              onChange={handlePhoneChange}
+              className={phoneError ? "error" : ""}
+            />
+            {phoneError && <p className="error-message">{phoneError}</p>}
+          </div>
+          <div className="button-group">
+            <button onClick={() => setShowRegistration(false)}>Назад</button>
+            <button onClick={handleRegister} className="primary-button">Зарегистрироваться</button>
+          </div>
         </div>
       ) : (
-        <div>
-          <input
-            type="tel"
-            placeholder="Номер телефона"
-            value={phoneNumber}
-            onChange={(e) => setPhoneNumber(e.target.value)}
-          />
-          <button onClick={handleLogin}>Войти</button>
+        <div className="login-form">
+          <div className="form-group">
+            <label htmlFor="phone">Номер телефона</label>
+            <input
+              id="phone"
+              type="tel"
+              placeholder="Например: 050-1234567"
+              value={phoneNumber}
+              onChange={handlePhoneChange}
+              className={phoneError ? "error" : ""}
+            />
+            {phoneError && <p className="error-message">{phoneError}</p>}
+          </div>
+          <button onClick={handleCheckUser} className="primary-button">Продолжить</button>
         </div>
       )}
     </div>
